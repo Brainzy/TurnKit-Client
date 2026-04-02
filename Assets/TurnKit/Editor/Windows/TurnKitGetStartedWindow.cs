@@ -197,7 +197,7 @@ namespace TurnKit.Editor
                             bool canOpen = AssetDatabase.LoadAssetAtPath<SceneAsset>(sample.ScenePath) != null;
                             using (new EditorGUI.DisabledScope(!canOpen))
                             {
-                                if (GUILayout.Button("Import & Open Scene", GUILayout.Height(26f), GUILayout.Width(150f)))
+                                if (GUILayout.Button("Open Scene", GUILayout.Height(26f), GUILayout.Width(150f)))
                                 {
                                     OpenSampleScene(sample.ScenePath);
                                 }
