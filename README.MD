@@ -1,3 +1,5 @@
+TurnKit Server is currently in private beta. Public infrastructure and dashboard access are launching in April 2026
+
 ## License
 
 **TurnKit Unity Client** is open-sourced under the [MIT License](Assets/TurnKit/LICENSE.txt).
@@ -9,4 +11,4 @@ It includes slightly modified portions of third-party libraries (SimpleJSON, Nat
 
 ---
 
-Made with ❤️ by [Nenad Nikolic](https://turnkit.dev)
+Made by [Nenad Nikolic](https://turnkit.dev)
