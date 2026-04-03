@@ -54,7 +54,7 @@ namespace TurnKit
             public bool ignoreAllOwnership = false;
             public bool votingEnabled = false;
             public VotingMode votingMode = VotingMode.SYNC;
-            public int votesRequired = 1;
+            public int votesRequired = 2;
             public int votesToFail = 1;
             public FailAction failAction = FailAction.SKIP_TURN;
             public int matchTimeoutMinutes = 10;
