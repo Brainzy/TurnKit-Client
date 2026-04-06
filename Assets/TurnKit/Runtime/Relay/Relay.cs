@@ -16,8 +16,6 @@ namespace TurnKit
         private const float AutoReconnectInitialDelaySeconds = 1f;
         private const float AutoReconnectMaxDelaySeconds = 8f;
 
-        public static string token = "";
-
         private static Relay _instance;
 
         public static Relay Instance
@@ -72,7 +70,22 @@ namespace TurnKit
             _messageRouter = new RelayMessageRouter(_state, DispatchListChanged);
         }
 
-        public static async Task<bool> MatchWithAnyone(string playerId, string slug, Dictionary<string, List<RelayItem>> items = null)
+        public static Task<bool> MatchWithAnyone(string playerId, string slug, Dictionary<string, List<RelayItem>> items = null)
+        {
+            return MatchWithAnyone(TurnKitClientIdentity.Open(playerId), slug, items);
+        }
+
+        public static Task<bool> MatchWithAnyone(TurnKitPlayerSession session, string slug, Dictionary<string, List<RelayItem>> items = null)
+        {
+            return MatchWithAnyone(TurnKitClientIdentity.Authenticated(session), slug, items);
+        }
+
+        public static Task<bool> MatchWithAnyone(TurnKitSignedPlayer player, string slug, Dictionary<string, List<RelayItem>> items = null)
+        {
+            return MatchWithAnyone(TurnKitClientIdentity.Signed(player), slug, items);
+        }
+
+        private static async Task<bool> MatchWithAnyone(TurnKitClientIdentity identity, string slug, Dictionary<string, List<RelayItem>> items = null)
         {
             if (Registry.Initializers.TryGetValue(slug, out var initAction))
             {
@@ -87,38 +100,29 @@ namespace TurnKit
             var itemsJson = BuildItemsJson(items);
             var body = $"{{\"slug\":\"{slug}\",\"items\":{itemsJson}}}";
 
-            using var req = new UnityWebRequest($"{TurnKitConfig.Instance.serverUrl}/v1/client/relay/queue", "POST");
-            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("Authorization", $"Bearer {TurnKitConfig.Instance.clientKey}");
-            req.SetRequestHeader("X-Player-Id", playerId);
-            req.SetRequestHeader("X-Player-Token", token);
+            using var req = TurnKitClientRequest.CreateJson("/v1/client/relay/queue", "POST", body);
+            await TurnKitClientRequest.PrepareIdentity(req, identity);
 
-            var op = req.SendWebRequest();
-            while (!op.isDone)
+            try
             {
-                await Task.Yield();
+                var response = await TurnKitClientRequest.SendJson<QueueResponse>(req);
+                Instance._relayToken = response.relayToken;
+                Instance._sessionId = response.sessionId;
+                Instance._mySlot = (TurnKitConfig.PlayerSlot)response.slot;
+                Instance._myPlayerId = identity.PlayerId;
+                Instance._state.SetLocalPlayer(identity.PlayerId);
+                Instance._sessionTerminated = false;
+                Instance._allowReconnect = true;
+                Instance.ResetReconnectBackoff();
+
+                await Instance._transport.Connect(Instance._relayToken, Instance._state.LastAcknowledgedMoveNumber);
+                return true;
             }
-
-            if (req.result != UnityWebRequest.Result.Success)
+            catch (Exception ex)
             {
-                Debug.LogError($"[TurnKit] Queue join failed: {req.downloadHandler.text}");
+                Debug.LogError($"[TurnKit] Queue join failed: {ex.Message}");
                 return false;
             }
-
-            var response = JsonUtility.FromJson<QueueResponse>(req.downloadHandler.text);
-            Instance._relayToken = response.relayToken;
-            Instance._sessionId = response.sessionId;
-            Instance._mySlot = (TurnKitConfig.PlayerSlot)response.slot;
-            Instance._myPlayerId = playerId;
-            Instance._state.SetLocalPlayer(playerId);
-            Instance._sessionTerminated = false;
-            Instance._allowReconnect = true;
-            Instance.ResetReconnectBackoff();
-
-            await Instance._transport.Connect(Instance._relayToken, Instance._state.LastAcknowledgedMoveNumber);
-            return true;
         }
 
         public static async Task<bool> Reconnect()
@@ -217,7 +221,22 @@ namespace TurnKit
             Instance._transport.Send("{\"type\":\"END_GAME\"}");
         }
 
-        public static async Task LeaveQueue(string playerId, string slug)
+        public static Task LeaveQueue(string playerId, string slug)
+        {
+            return LeaveQueue(TurnKitClientIdentity.Open(playerId), slug);
+        }
+
+        public static Task LeaveQueue(TurnKitPlayerSession session, string slug)
+        {
+            return LeaveQueue(TurnKitClientIdentity.Authenticated(session), slug);
+        }
+
+        public static Task LeaveQueue(TurnKitSignedPlayer player, string slug)
+        {
+            return LeaveQueue(TurnKitClientIdentity.Signed(player), slug);
+        }
+
+        private static async Task LeaveQueue(TurnKitClientIdentity identity, string slug)
         {
             if (_instance != null)
             {
@@ -225,15 +244,9 @@ namespace TurnKit
                 await _instance._transport.Close();
             }
 
-            using var req = new UnityWebRequest($"{TurnKitConfig.Instance.serverUrl}/v1/client/relay/queue/{slug}", "DELETE");
-            req.SetRequestHeader("Authorization", $"Bearer {TurnKitConfig.Instance.clientKey}");
-            req.SetRequestHeader("X-Player-Id", playerId);
-            req.downloadHandler = new DownloadHandlerBuffer();
-            var op = req.SendWebRequest();
-            while (!op.isDone)
-            {
-                await Task.Yield();
-            }
+            using var req = TurnKitClientRequest.Create($"/v1/client/relay/queue/{slug}", "DELETE");
+            await TurnKitClientRequest.PrepareIdentity(req, identity);
+            await TurnKitClientRequest.Send(req);
         }
 
         public void InitializeFromMetadata<T>(Dictionary<T, TurnKitConfig.RelayListConfig> metadata) where T : Enum

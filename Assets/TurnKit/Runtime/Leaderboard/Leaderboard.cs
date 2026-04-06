@@ -55,7 +55,6 @@ namespace TurnKit.Leaderboard
     public static class Leaderboard
     {
         private const string UrlPrefix = "/v1/client/leaderboards/";
-        private const int TimeoutSeconds = 10;
 
         /// <summary>
         /// Submits a score for the current player.
@@ -67,9 +66,36 @@ namespace TurnKit.Leaderboard
             string metadata = null,
             string leaderboard = null)
         {
+            return SubmitScore(TurnKitClientIdentity.Open(playerId), score, metadata, leaderboard);
+        }
+
+        public static Task<ScoreSubmitResponse> SubmitScore(
+            TurnKitPlayerSession session,
+            double score,
+            string metadata = null,
+            string leaderboard = null)
+        {
+            return SubmitScore(TurnKitClientIdentity.Authenticated(session), score, metadata, leaderboard);
+        }
+
+        public static Task<ScoreSubmitResponse> SubmitScore(
+            TurnKitSignedPlayer player,
+            double score,
+            string metadata = null,
+            string leaderboard = null)
+        {
+            return SubmitScore(TurnKitClientIdentity.Signed(player), score, metadata, leaderboard);
+        }
+
+        private static Task<ScoreSubmitResponse> SubmitScore(
+            TurnKitClientIdentity identity,
+            double score,
+            string metadata,
+            string leaderboard)
+        {
             var url = $"{Base}{Slug(leaderboard)}/scores";
             var body = new SubmitScoreRequest { scoreValue = score, metadata = metadata };
-            return Post<ScoreSubmitResponse>(playerId, url, JsonUtility.ToJson(body));
+            return Post<ScoreSubmitResponse>(identity, url, JsonUtility.ToJson(body));
         }
 
         /// <summary>
@@ -80,8 +106,32 @@ namespace TurnKit.Leaderboard
             int limit = 10,
             string leaderboard = null)
         {
+            return GetTopScores(TurnKitClientIdentity.Open(playerId), limit, leaderboard);
+        }
+
+        public static Task<TopScores> GetTopScores(
+            TurnKitPlayerSession session,
+            int limit = 10,
+            string leaderboard = null)
+        {
+            return GetTopScores(TurnKitClientIdentity.Authenticated(session), limit, leaderboard);
+        }
+
+        public static Task<TopScores> GetTopScores(
+            TurnKitSignedPlayer player,
+            int limit = 10,
+            string leaderboard = null)
+        {
+            return GetTopScores(TurnKitClientIdentity.Signed(player), limit, leaderboard);
+        }
+
+        private static Task<TopScores> GetTopScores(
+            TurnKitClientIdentity identity,
+            int limit,
+            string leaderboard)
+        {
             var url = $"{Base}{Slug(leaderboard)}/top?limit={limit}";
-            return Get<TopScores>(playerId, url);
+            return Get<TopScores>(identity, url);
         }
 
         /// <summary>
@@ -93,8 +143,32 @@ namespace TurnKit.Leaderboard
             int surrounding = 5,
             string leaderboard = null)
         {
+            return GetMyRank(TurnKitClientIdentity.Open(playerId), surrounding, leaderboard);
+        }
+
+        public static Task<PlayerScore> GetMyRank(
+            TurnKitPlayerSession session,
+            int surrounding = 5,
+            string leaderboard = null)
+        {
+            return GetMyRank(TurnKitClientIdentity.Authenticated(session), surrounding, leaderboard);
+        }
+
+        public static Task<PlayerScore> GetMyRank(
+            TurnKitSignedPlayer player,
+            int surrounding = 5,
+            string leaderboard = null)
+        {
+            return GetMyRank(TurnKitClientIdentity.Signed(player), surrounding, leaderboard);
+        }
+
+        private static Task<PlayerScore> GetMyRank(
+            TurnKitClientIdentity identity,
+            int surrounding,
+            string leaderboard)
+        {
             var url = $"{Base}{Slug(leaderboard)}/me?surrounding={surrounding}";
-            return Get<PlayerScore>(playerId, url);
+            return Get<PlayerScore>(identity, url);
         }
 
         /// <summary>
@@ -106,9 +180,36 @@ namespace TurnKit.Leaderboard
             int surrounding = 5,
             string leaderboard = null)
         {
+            return GetPlayerRank(TurnKitClientIdentity.Open(playerId), playerId, surrounding, leaderboard);
+        }
+
+        public static Task<PlayerScore> GetPlayerRank(
+            TurnKitPlayerSession session,
+            string playerId,
+            int surrounding = 5,
+            string leaderboard = null)
+        {
+            return GetPlayerRank(TurnKitClientIdentity.Authenticated(session), playerId, surrounding, leaderboard);
+        }
+
+        public static Task<PlayerScore> GetPlayerRank(
+            TurnKitSignedPlayer player,
+            string playerId,
+            int surrounding = 5,
+            string leaderboard = null)
+        {
+            return GetPlayerRank(TurnKitClientIdentity.Signed(player), playerId, surrounding, leaderboard);
+        }
+
+        private static Task<PlayerScore> GetPlayerRank(
+            TurnKitClientIdentity identity,
+            string playerId,
+            int surrounding,
+            string leaderboard)
+        {
             var url = $"{Base}{Slug(leaderboard)}/players/{UnityWebRequest.EscapeURL(playerId)}" +
                       $"?surrounding={surrounding}";
-            return Get<PlayerScore>(playerId, url);
+            return Get<PlayerScore>(identity, url);
         }
 
         /// <summary>
@@ -120,47 +221,50 @@ namespace TurnKit.Leaderboard
             int surrounding = 5,
             string leaderboard = null)
         {
+            return GetCombined(TurnKitClientIdentity.Open(playerId), topLimit, surrounding, leaderboard);
+        }
+
+        public static Task<CombinedScores> GetCombined(
+            TurnKitPlayerSession session,
+            int topLimit = 10,
+            int surrounding = 5,
+            string leaderboard = null)
+        {
+            return GetCombined(TurnKitClientIdentity.Authenticated(session), topLimit, surrounding, leaderboard);
+        }
+
+        public static Task<CombinedScores> GetCombined(
+            TurnKitSignedPlayer player,
+            int topLimit = 10,
+            int surrounding = 5,
+            string leaderboard = null)
+        {
+            return GetCombined(TurnKitClientIdentity.Signed(player), topLimit, surrounding, leaderboard);
+        }
+
+        private static Task<CombinedScores> GetCombined(
+            TurnKitClientIdentity identity,
+            int topLimit,
+            int surrounding,
+            string leaderboard)
+        {
             var url = $"{Base}{Slug(leaderboard)}/combined" +
                       $"?topLimit={topLimit}&surrounding={surrounding}";
-            return Get<CombinedScores>(playerId, url);
+            return Get<CombinedScores>(identity, url);
         }
 
-        private static async Task<T> Post<T>(string playerId, string url, string json) where T : new()
+        private static async Task<T> Post<T>(TurnKitClientIdentity identity, string url, string json) where T : new()
         {
-            var bytes = Encoding.UTF8.GetBytes(json);
-            using var req = new UnityWebRequest(url, "POST")
-            {
-                uploadHandler = new UploadHandlerRaw(bytes),
-                downloadHandler = new DownloadHandlerBuffer(),
-                timeout = TimeoutSeconds
-            };
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.SetRequestHeader("Authorization", $"Bearer {playerId}");
-            req.SetRequestHeader("X-Player-Id", playerId);
-
-            var op = req.SendWebRequest();
-            while (!op.isDone) await Task.Yield();
-
-            if (req.result != UnityWebRequest.Result.Success)
-                throw new Exception($"TurnKit [{req.responseCode}]: {req.downloadHandler.text}");
-
-            return JsonUtility.FromJson<T>(req.downloadHandler.text) ?? new T();
+            using var req = TurnKitClientRequest.CreateJson(url, "POST", json);
+            await TurnKitClientRequest.PrepareIdentity(req, identity);
+            return await TurnKitClientRequest.SendJson<T>(req);
         }
 
-        private static async Task<T> Get<T>(string playerId, string url) where T : new()
+        private static async Task<T> Get<T>(TurnKitClientIdentity identity, string url) where T : new()
         {
-            using var req = UnityWebRequest.Get(url);
-            req.timeout = TimeoutSeconds;
-            req.SetRequestHeader("Authorization", $"Bearer { TurnKitConfig.Instance.clientKey}");
-            req.SetRequestHeader("X-Player-Id", playerId);
-
-            var op = req.SendWebRequest();
-            while (!op.isDone) await Task.Yield();
-
-            if (req.result != UnityWebRequest.Result.Success)
-                throw new Exception($"TurnKit [{req.responseCode}]: {req.downloadHandler.text}");
-
-            return JsonUtility.FromJson<T>(req.downloadHandler.text) ?? new T();
+            using var req = TurnKitClientRequest.CreateGet(url);
+            await TurnKitClientRequest.PrepareIdentity(req, identity);
+            return await TurnKitClientRequest.SendJson<T>(req);
         }
 
         private static string Base =>
