@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 
-namespace TurnKit.Leaderboard
+namespace TurnKit
 {
     [Serializable]
     internal class SubmitScoreRequest
@@ -58,7 +58,7 @@ namespace TurnKit.Leaderboard
 
         /// <summary>
         /// Submits a score for the current player.
-        /// Player identity comes from TurnKitConfig.PlayerId.
+        /// Player identity comes from the provided player id.
         /// </summary>
         public static Task<ScoreSubmitResponse> SubmitScore(
             string playerId,
@@ -136,7 +136,7 @@ namespace TurnKit.Leaderboard
 
         /// <summary>
         /// Fetches the current player's rank and surrounding entries.
-        /// Uses TurnKitConfig.PlayerId as the player identity.
+        /// Uses the provided player id as the player identity.
         /// </summary>
         public static Task<PlayerScore> GetMyRank(
             string playerId,
@@ -271,6 +271,6 @@ namespace TurnKit.Leaderboard
             TurnKitConfig.Instance.serverUrl.TrimEnd('/') + UrlPrefix;
 
         private static string Slug(string leaderboard) =>
-            !string.IsNullOrWhiteSpace(leaderboard) ? leaderboard : TurnKitConfig.Instance.clientKey;
+            !string.IsNullOrWhiteSpace(leaderboard) ? leaderboard : TurnKitConfig.Instance.defaultLeaderboard;
     }
 }

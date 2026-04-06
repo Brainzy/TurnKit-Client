@@ -9,8 +9,9 @@ namespace TurnKit.Editor
 {
     public static class TurnKitAPI
     {
-        public const string BASE_URL = "https://api.turnkit.dev";
         public const string AUTH_URL_SUFFIX = "/unity-auth";
+
+        internal static string BaseUrl => TurnKitConfig.Instance.serverUrl.TrimEnd('/');
 
         // Request/Response DTOs
         [Serializable]
@@ -72,7 +73,7 @@ namespace TurnKit.Editor
 
         public static IEnumerator ExchangeAuthCode(string authCode, Action<AuthResponse> onSuccess, Action<string> onError)
         {
-            var request = new UnityWebRequest($"{BASE_URL}/v1/dev/exchange-auth-code", "POST");
+            var request = new UnityWebRequest($"{BaseUrl}/v1/dev/exchange-auth-code", "POST");
 
             var requestData = new ExchangeAuthCodeRequest {authCode = authCode};
             var json = JsonUtility.ToJson(requestData);
@@ -110,7 +111,7 @@ namespace TurnKit.Editor
             Action<List<TurnKitConfig.RelayConfig>> onSuccess,
             Action<string> onError)
         {
-            var req = UnityWebRequest.Get($"{BASE_URL}/v1/dev/relay-configs?gameKeyId={gameId}");
+            var req = UnityWebRequest.Get($"{BaseUrl}/v1/dev/relay-configs?gameKeyId={gameId}");
             return SendRequest(req, jwt, (json) =>
             {
                 try
@@ -157,8 +158,8 @@ namespace TurnKit.Editor
 
             string jsonBody = JsonUtility.ToJson(dto);
             string url = string.IsNullOrEmpty(relay.id)
-                ? $"{BASE_URL}/v1/dev/relay-configs?gameKeyId={gameKeyId}"
-                : $"{BASE_URL}/v1/dev/relay-configs/{UnityWebRequest.EscapeURL(relay.slug)}?gameKeyId={gameKeyId}";
+                ? $"{BaseUrl}/v1/dev/relay-configs?gameKeyId={gameKeyId}"
+                : $"{BaseUrl}/v1/dev/relay-configs/{UnityWebRequest.EscapeURL(relay.slug)}?gameKeyId={gameKeyId}";
 
             string method = string.IsNullOrEmpty(relay.id) ? "POST" : "PUT";
             var request = new UnityWebRequest(url, method);
@@ -209,7 +210,7 @@ namespace TurnKit.Editor
             Action onSuccess, Action<string> onError)
         {
             Debug.Log($"[TurnKit API] Deleting relay config: {slug}");
-            string url = $"{BASE_URL}/v1/dev/relay-configs/{UnityWebRequest.EscapeURL(slug)}?gameKeyId={gameKeyId}";
+            string url = $"{BaseUrl}/v1/dev/relay-configs/{UnityWebRequest.EscapeURL(slug)}?gameKeyId={gameKeyId}";
             var request = UnityWebRequest.Delete(url);
             return SendRequest(request, jwt, 
                 _ => {

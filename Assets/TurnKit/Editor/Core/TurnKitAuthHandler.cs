@@ -91,7 +91,7 @@ namespace TurnKit.Editor
             nextPollTime = 0;
             
             string encodedName = UnityWebRequest.EscapeURL(projectName);
-            string url = $"{TurnKitAPI.BASE_URL}{TurnKitAPI.AUTH_URL_SUFFIX}?projectName={encodedName}&pollId={activePollId}";
+            string url = $"{TurnKitAPI.BaseUrl}{TurnKitAPI.AUTH_URL_SUFFIX}?projectName={encodedName}&pollId={activePollId}";
             
             Application.OpenURL(url);
             
@@ -125,7 +125,7 @@ namespace TurnKit.Editor
             
             Debug.Log($"[TurnKit] Polling attempt {pollAttempts}/60...");
             
-            string pollUrl = $"{TurnKitAPI.BASE_URL}/v1/dev/auth-status?pollId={activePollId}";
+            string pollUrl = $"{TurnKitAPI.BaseUrl}/v1/dev/auth-status?pollId={activePollId}";
             var request = UnityWebRequest.Get(pollUrl);
             
             var op = request.SendWebRequest();
