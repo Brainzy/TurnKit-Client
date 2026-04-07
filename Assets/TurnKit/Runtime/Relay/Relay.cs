@@ -230,6 +230,7 @@ namespace TurnKit
 
         public static bool IsReady => Instance._transport.IsConnected && !Instance._state.IsInSyncWindow;
         public static bool IsMyTurn => Instance._state.IsMyTurn;
+        public static int LastAcknowledgedMoveNumber => Instance._state.LastAcknowledgedMoveNumber;
         public static string MyPlayerId => Instance._myPlayerId;
         public static TurnKitConfig.PlayerSlot MySlot => Instance._mySlot;
         public static string CurrentPlayerId => Instance._state.CurrentTurnPlayerId;
