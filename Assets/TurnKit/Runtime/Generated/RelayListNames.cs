@@ -19,25 +19,25 @@ namespace TurnKit
                 name = "p1_hidden",
                 tag = nameof(Tag.hand),
                 ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1 },
-                visibleToSlots = new List<TurnKitConfig.PlayerSlot> {  }
+                visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1 }
             } },
             { List.p2_hidden, new TurnKitConfig.RelayListConfig {
                 name = "p2_hidden",
                 tag = nameof(Tag.hand),
                 ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player2 },
-                visibleToSlots = new List<TurnKitConfig.PlayerSlot> {  }
+                visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player2 }
             } },
             { List.results_public, new TurnKitConfig.RelayListConfig {
                 name = "results_public",
                 tag = nameof(Tag.table),
                 ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 },
-                visibleToSlots = new List<TurnKitConfig.PlayerSlot> {  }
+                visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 }
             } },
             { List.discard_public, new TurnKitConfig.RelayListConfig {
                 name = "discard_public",
                 tag = nameof(Tag.discard),
                 ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 },
-                visibleToSlots = new List<TurnKitConfig.PlayerSlot> {  }
+                visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 }
             } },
         };
     }
