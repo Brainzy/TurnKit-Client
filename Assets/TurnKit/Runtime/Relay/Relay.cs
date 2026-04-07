@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using TurnKit.Internal.SimpleJSON;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace TurnKit
 {
@@ -161,34 +159,33 @@ namespace TurnKit
             return list;
         }
 
-        public static RelayList GetMyList(string tag)
+        public static List<RelayList> GetMyLists<T>(T tag) where T : Enum
         {
-            if (!Instance._state.TryGetListByTag(tag, out var list))
+            if (!Instance._state.TryGetListsByTag(tag.ToString(), out var lists))
             {
                 Debug.LogError($"[TurnKit] List with tag '{tag}' not found.");
                 return null;
             }
 
-            if (!list.IsOwnedByMe)
-            {
-                Debug.LogError($"[TurnKit] List '{list.Name}' with tag '{tag}' is not owned by you.");
-                return null;
-            }
-
-            return list;
+            return lists.Where(list => list.IsOwnedByMe).ToList();
         }
 
-        public static RelayList GetList(string tag, TurnKitConfig.PlayerSlot ownerSlot)
+        public static List<RelayList> GetOpponentsLists<T>(T tag) where T : Enum
         {
-            if (!Instance._state.TryGetListByTag(tag, out var list))
+            if (!Instance._state.TryGetListsByTag(tag.ToString(), out var lists))
             {
                 Debug.LogError($"[TurnKit] List with tag '{tag}' not found.");
                 return null;
             }
 
-            if (!list.OwnerSlots.Contains(ownerSlot))
+            return lists.Where(list => !list.IsOwnedByMe).ToList();
+        }
+
+        public static RelayList GetList<T>(T name)
+        {
+            if (!Instance._state.TryGetListByName(name.ToString(), out var list))
             {
-                Debug.LogError($"[TurnKit] List '{list.Name}' with tag '{tag}' is not owned by slot {ownerSlot}.");
+                Debug.LogError($"[TurnKit] List with tag '{name}' not found.");
                 return null;
             }
 

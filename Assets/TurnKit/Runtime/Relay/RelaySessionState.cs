@@ -8,10 +8,10 @@ namespace TurnKit
 {
     internal sealed class RelaySessionState
     {
-        private readonly List<RelayList> _allLists = new List<RelayList>();
-        private readonly Dictionary<string, RelayList> _listsByName = new Dictionary<string, RelayList>();
-        private readonly Dictionary<string, RelayList> _listsByTag = new Dictionary<string, RelayList>();
-        private readonly List<PlayerInfo> _players = new List<PlayerInfo>();
+        private readonly List<RelayList> _allLists = new();
+        private readonly Dictionary<string, RelayList> _listsByName = new();
+        private readonly Dictionary<string, List<RelayList>> _listsByTag = new();
+        private readonly List<PlayerInfo> _players = new();
 
         private string _myPlayerId;
 
@@ -129,7 +129,7 @@ namespace TurnKit
             return _listsByName.TryGetValue(name, out list);
         }
 
-        public bool TryGetListByTag(string tag, out RelayList list)
+        public bool TryGetListsByTag(string tag, out List<RelayList> list)
         {
             return _listsByTag.TryGetValue(tag, out list);
         }
@@ -286,10 +286,11 @@ namespace TurnKit
             _allLists.Add(relayList);
             _listsByName[relayList.Name] = relayList;
 
-            if (!string.IsNullOrEmpty(relayList.Tag))
+            if (!_listsByTag.ContainsKey(relayList.Tag))
             {
-                _listsByTag[relayList.Tag] = relayList;
+                _listsByTag.Add(relayList.Tag, new List<RelayList>());
             }
+            _listsByTag[relayList.Tag].Add(relayList);
         }
 
         private void ClearLists()
