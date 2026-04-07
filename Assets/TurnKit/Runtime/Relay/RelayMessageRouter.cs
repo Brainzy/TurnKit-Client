@@ -127,8 +127,8 @@ namespace TurnKit
             var change = new VisibleChange
             {
                 type = (ChangeType)Enum.Parse(typeof(ChangeType), node["type"].Value.ToUpper()),
-                fromList = node["fromList"]?.Value,
-                toList = node["toList"]?.Value,
+                fromList = ResolveList(node["fromList"]?.Value),
+                toList = ResolveList(node["toList"]?.Value),
                 actingSlot = node["actingSlot"]?.Value
             };
 
@@ -151,6 +151,16 @@ namespace TurnKit
             }
 
             return change;
+        }
+
+        private RelayList ResolveList(string listName)
+        {
+            if (string.IsNullOrEmpty(listName))
+            {
+                return null;
+            }
+
+            return Relay.GetList(listName);
         }
     }
 }

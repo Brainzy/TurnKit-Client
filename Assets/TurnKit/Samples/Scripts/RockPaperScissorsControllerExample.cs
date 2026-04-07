@@ -88,15 +88,15 @@ namespace TurnKit.Example
             {
                 if (change.type == ChangeType.SPAWN) // player adding to not owned list is covered by server, it checks ownership
                 {
-                    var list = Relay.GetList(change.fromList); // ToDo this can be handled by relay
+                    var list = change.fromList;
                     if (list.Items.Count > 0) return false; // tried to pick a second sign.
                     if (!validSigns.Contains(list.Items.First().Slug)) return false; // {act.slug} is not a valid sign
                 }
 
                 if (change.type != ChangeType.MOVE)
                 {
-                    var fromList = Relay.GetList(change.fromList); // ToDo this can be handled by relay
-                    var toList = Relay.GetList(change.toList); // ToDo this can be handled by relay
+                    var fromList = change.fromList;
+                    var toList = change.toList;
                     if (change.items.Length != 2) return false; // must be 2 signs moved to public list
                   
                     bool p1Ready = currentLists["p1_hidden"].Count > 0;

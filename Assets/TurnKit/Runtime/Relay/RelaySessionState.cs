@@ -58,20 +58,6 @@ namespace TurnKit
             LastAcknowledgedMoveNumber = msg.moveNumber;
             IsInSyncWindow = false;
 
-            ClearLists();
-            foreach (var def in msg.lists)
-            {
-                var relayList = new RelayList
-                {
-                    Name = def.name,
-                    Tag = def.tag,
-                    _ownerSlots = ResolveSlots(def.ownerSlots, def.ownerPlayerIds),
-                    _visibleToSlots = ResolveSlots(def.visibleToSlots, def.visibleToPlayerIds)
-                };
-
-                RegisterList(relayList);
-            }
-
             var contentsNode = node["listContents"].AsObject;
             if (contentsNode == null)
             {
@@ -163,9 +149,10 @@ namespace TurnKit
 
         private void ApplySpawn(VisibleChange change, Action<RelayList, ListChangeType> notifyListChanged)
         {
-            if (!_listsByName.TryGetValue(change.toList, out var list))
+            var list = change.toList;
+            if (list == null)
             {
-                Debug.LogWarning($"[TurnKit] List {change.toList} not found for SPAWN");
+                Debug.LogWarning("[TurnKit] Target list not found for SPAWN");
                 return;
             }
 
@@ -179,8 +166,9 @@ namespace TurnKit
 
         private void ApplyMove(VisibleChange change, Action<RelayList, ListChangeType> notifyListChanged)
         {
-            if (!_listsByName.TryGetValue(change.fromList, out var fromList) ||
-                !_listsByName.TryGetValue(change.toList, out var toList))
+            var fromList = change.fromList;
+            var toList = change.toList;
+            if (fromList == null || toList == null)
             {
                 Debug.LogWarning("[TurnKit] Lists not found for MOVE");
                 return;
@@ -203,9 +191,10 @@ namespace TurnKit
 
         private void ApplyRemove(VisibleChange change, Action<RelayList, ListChangeType> notifyListChanged)
         {
-            if (!_listsByName.TryGetValue(change.fromList, out var list))
+            var list = change.fromList;
+            if (list == null)
             {
-                Debug.LogWarning($"[TurnKit] List {change.fromList} not found for REMOVE");
+                Debug.LogWarning("[TurnKit] Source list not found for REMOVE");
                 return;
             }
 
@@ -225,12 +214,12 @@ namespace TurnKit
         {
             if (TurnKitConfig.Instance.enableLogging)
             {
-                Debug.Log($"[TurnKit] List {change.fromList} was shuffled");
+                Debug.Log($"[TurnKit] List {change.fromList?.Name} was shuffled");
             }
 
-            if (_listsByName.TryGetValue(change.fromList, out var list))
+            if (change.fromList != null)
             {
-                notifyListChanged?.Invoke(list, ListChangeType.Shuffled);
+                notifyListChanged?.Invoke(change.fromList, ListChangeType.Shuffled);
             }
         }
 

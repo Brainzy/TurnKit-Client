@@ -226,8 +226,8 @@ namespace TurnKit
     public class VisibleChange
     {
         public ChangeType type;
-        public string fromList;
-        public string toList;
+        public RelayList fromList;
+        public RelayList toList;
         public RelayItem[] items;
         public string actingSlot;
     }
