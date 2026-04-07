@@ -8,7 +8,6 @@ namespace TurnKit.Example
 {
     public class RockPaperScissorsControllerExample : MonoBehaviour
     {
-        /*
         [SerializeField] private InputField playerIdText;
         [SerializeField] private Text gameEndText;
         [SerializeField] private Text statusText;
@@ -16,7 +15,7 @@ namespace TurnKit.Example
 
         private RelayList myHand;
         private RelayList opponentHand;
-        private RelayList table;
+        private RelayList revealedList;
         private bool isSignPicked;
         private readonly string[] validSigns = {"ROCK", "PAPER", "SCISSORS"};
         private void Awake()
@@ -31,7 +30,7 @@ namespace TurnKit.Example
             {
                 myHand = Relay.GetMyLists(ExampleConfig.Tag.hand).First();
                 opponentHand = Relay.GetOpponentsLists(ExampleConfig.Tag.hand).First();
-                table = Relay.GetMyLists(ExampleConfig.Tag.table).First();
+                revealedList = Relay.GetMyLists(ExampleConfig.Tag.table).First();
                 statusText.text = "Game started";
             };
         }
@@ -42,7 +41,7 @@ namespace TurnKit.Example
             opponentText.text = "";
             gameEndText.text = "";
             statusText.text = "Waiting for opponent, connect with another client";
-            await Relay.MatchWithAnyone(playerIdText.text, "example");
+            await Relay.MatchWithAnyone(playerIdText.text, ExampleConfig.Slug);
         }
 
         public void SignChosen(string sign)
@@ -64,10 +63,10 @@ namespace TurnKit.Example
             if (msg.playerId != playerIdText.text) opponentText.text = "Opponent chosen sign";
             else isSignPicked = true;
             
-            if (table.Count == 2) //signs are revealed
+            if (revealedList.Count == 2) //signs are revealed
             {
-                var mySign = myHand.Items.First().Slug;
-                var opponentSign = opponentHand.Items.First().Slug;
+                var mySign = revealedList.Items.First(x => x.CreatorSlot == Relay.MySlot).Slug;
+                var opponentSign = revealedList.Items.First(x => x.CreatorSlot != Relay.MySlot).Slug;
                 opponentText.text = $"Opponent chose {opponentSign}";
                 if (mySign == opponentSign)
                 {
@@ -88,22 +87,14 @@ namespace TurnKit.Example
             {
                 if (change.type == ChangeType.SPAWN) // player adding to not owned list is covered by server, it checks ownership
                 {
-                    var list = change.fromList;
-                    if (list.Items.Count > 0) return false; // tried to pick a second sign.
-                    if (!validSigns.Contains(list.Items.First().Slug)) return false; // {act.slug} is not a valid sign
+                    if (change.toList.Items.Count > 1) return false; // tried to pick a second sign.
+                    if (!validSigns.Contains(change.toList.Items.First().Slug)) return false; // {act.slug} is not a valid sign
                 }
 
-                if (change.type != ChangeType.MOVE)
+                if (change.type == ChangeType.MOVE)
                 {
-                    var fromList = change.fromList;
-                    var toList = change.toList;
-                    if (change.items.Length != 2) return false; // must be 2 signs moved to public list
-                  
-                    bool p1Ready = currentLists["p1_hidden"].Count > 0;
-                        bool p2Ready = currentLists["p2_hidden"].Count > 0;
-                        if (!p1Ready || !p2Ready) return false; // Attempted to reveal before both players picked
-                        break;
-
+                    if (change.items.Length != 1) return false; // 1 sign moved from each list
+                    if (myHand.Items.Count != 0 || opponentHand.Items.Count != 0) return false; // must be no items remaining
                 }
             }
             return true;
@@ -111,13 +102,12 @@ namespace TurnKit.Example
         
         private void OnTurnChanged(TurnChangedMessage message)
         {
-            if (currentLists == null) return;
-            if (currentLists["p1_hidden"].Count > 0 && currentLists["p2_hidden"].Count > 0) { // both players picked their sign
+            if (myHand.Items.Count == 1 && opponentHand.Items.Count == 1 && Relay.IsMyTurn) // both players picked their sign
+            {
                 Debug.Log("Both players ready. Executing Reveal...");
-                Relay.Move(null, true, new List<RelayAction> {
-                    RelayAction.MoveAll("p1_hidden", "results_public", true),
-                    RelayAction.MoveAll("p2_hidden", "results_public", true)
-                });
+                myHand.Move(SelectorType.ALL).To(revealedList);
+                opponentHand.Move(SelectorType.ALL).IgnoreOwnership().To(revealedList);
+                Relay.EndMyTurn();
             }
         }
         
@@ -127,6 +117,5 @@ namespace TurnKit.Example
             gameEndText.text = gameEndReason;
             statusText.text = "Game ended";
         }
-*/
     }
 }

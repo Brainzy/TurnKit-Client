@@ -87,7 +87,7 @@ namespace TurnKit
 
         public JSONObject ToNode()
         {
-            var node = new JSONObject { ["action"] = action.ToString().ToLower() };
+            var node = new JSONObject { ["action"] = action.ToString() };
 
             switch (action)
             {
@@ -131,23 +131,11 @@ namespace TurnKit
         private JSONObject SerializeSelector()
         {
             var selectorNode = new JSONObject();
-
+            selectorNode["selector"] = selector.ToString();
+          
             switch (selector)
             {
-                case SelectorType.TOP:
-                    selectorNode["type"] = "top";
-                    break;
-                case SelectorType.BOTTOM:
-                    selectorNode["type"] = "bottom";
-                    break;
-                case SelectorType.RANDOM:
-                    selectorNode["type"] = "random";
-                    break;
-                case SelectorType.ALL:
-                    selectorNode["type"] = "all";
-                    break;
                 case SelectorType.BY_ITEM_IDS:
-                    selectorNode["type"] = "byItemIds";
                     var idsArray = new JSONArray();
                     foreach (var id in itemIds)
                     {
@@ -157,7 +145,6 @@ namespace TurnKit
                     selectorNode["itemIds"] = idsArray;
                     break;
                 case SelectorType.BY_SLUGS:
-                    selectorNode["type"] = "bySlugs";
                     var slugsArray = new JSONArray();
                     foreach (var slug in slugs)
                     {

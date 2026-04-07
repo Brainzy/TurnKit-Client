@@ -151,45 +151,22 @@ namespace TurnKit
         public static RelayList List<T>(T listEnum) where T : Enum
         {
             string name = listEnum.ToString();
-            if (!Instance._state.TryGetListByName(name, out var list))
-            {
-                throw new KeyNotFoundException($"[TurnKit] List not found: {name}");
-            }
-
-            return list;
+            return !Instance._state.TryGetListByName(name, out var list) ? throw new KeyNotFoundException($"[TurnKit] List not found: {name}") : list;
         }
 
         public static List<RelayList> GetMyLists<T>(T tag) where T : Enum
         {
-            if (!Instance._state.TryGetListsByTag(tag.ToString(), out var lists))
-            {
-                Debug.LogError($"[TurnKit] List with tag '{tag}' not found.");
-                return null;
-            }
-
-            return lists.Where(list => list.IsOwnedByMe).ToList();
+            return !Instance._state.TryGetListsByTag(tag.ToString(), out var lists) ? null : lists.Where(list => list.IsOwnedByMe).ToList();
         }
 
         public static List<RelayList> GetOpponentsLists<T>(T tag) where T : Enum
         {
-            if (!Instance._state.TryGetListsByTag(tag.ToString(), out var lists))
-            {
-                Debug.LogError($"[TurnKit] List with tag '{tag}' not found.");
-                return null;
-            }
-
-            return lists.Where(list => !list.IsOwnedByMe).ToList();
+            return !Instance._state.TryGetListsByTag(tag.ToString(), out var lists) ? null : lists.Where(list => !list.IsOwnedByMe).ToList();
         }
 
         public static RelayList GetList<T>(T name)
         {
-            if (!Instance._state.TryGetListByName(name.ToString(), out var list))
-            {
-                Debug.LogError($"[TurnKit] List with tag '{name}' not found.");
-                return null;
-            }
-
-            return list;
+            return !Instance._state.TryGetListByName(name.ToString(), out var list) ? null : list;
         }
 
         public static IReadOnlyList<RelayList> AllLists => Instance._state.AllLists;

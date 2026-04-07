@@ -46,7 +46,7 @@ namespace TurnKit
                 throw new ArgumentNullException(nameof(toList), "[TurnKit] Target list cannot be null.");
             }
 
-            if (!fromList.IsVisibleToMe)
+            if (!fromList.IsVisibleToMe && !ignoreOwnership)
             {
                 Debug.LogError($"[TurnKit] Cannot move from '{fromList.Name}': List not visible to you.");
                 return false;
