@@ -85,6 +85,11 @@ namespace TurnKit
 
         private static async Task<bool> MatchWithAnyone(TurnKitClientIdentity identity, string slug, Dictionary<string, List<RelayItem>> items = null)
         {
+            if (string.IsNullOrWhiteSpace(slug))
+            {
+                throw new ArgumentException("Relay slug is required.", nameof(slug));
+            }
+
             if (Registry.Initializers.TryGetValue(slug, out var initAction))
             {
                 initAction.Invoke();
@@ -95,9 +100,7 @@ namespace TurnKit
                 return false;
             }
 
-            var itemsJson = BuildItemsJson(items);
-            var body = $"{{\"slug\":\"{slug}\",\"items\":{itemsJson}}}";
-
+            var body = BuildQueueRequestJson(slug, items);
             using var req = TurnKitClientRequest.CreateJson("/v1/client/relay/queue", "POST", body);
             await TurnKitClientRequest.PrepareIdentity(req, identity);
 
@@ -409,29 +412,74 @@ namespace TurnKit
             OnListChanged?.Invoke(list, changeType);
         }
 
-        private static string BuildItemsJson(Dictionary<string, List<RelayItem>> items)
+        private static string BuildQueueRequestJson(string slug, Dictionary<string, List<RelayItem>> items)
         {
+            var request = new JSONObject();
+            request["slug"] = slug;
+            request["items"] = BuildItemsNode(items);
+            return request.ToString();
+        }
+
+        private static JSONNode BuildItemsNode(Dictionary<string, List<RelayItem>> items)
+        {
+            var obj = new JSONObject();
             if (items == null)
             {
-                return "{}";
+                return obj;
             }
 
-            var obj = new JSONObject();
             foreach (var kvp in items)
             {
+                if (string.IsNullOrWhiteSpace(kvp.Key) || kvp.Value == null)
+                {
+                    continue;
+                }
+
                 var arr = new JSONArray();
                 foreach (var item in kvp.Value)
                 {
+                    if (item == null)
+                    {
+                        continue;
+                    }
+
                     var itemNode = new JSONObject();
                     itemNode["id"] = item.Id;
                     itemNode["slug"] = item.Slug;
+                    itemNode["creatorSlot"] = (int)item.CreatorSlot;
                     arr.Add(itemNode);
                 }
 
                 obj.Add(kvp.Key, arr);
             }
 
-            return obj.ToString();
+            return obj;
+        }
+
+        private static bool HasQueueItems(Dictionary<string, List<RelayItem>> items)
+        {
+            if (items == null || items.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var kvp in items)
+            {
+                if (string.IsNullOrWhiteSpace(kvp.Key) || kvp.Value == null || kvp.Value.Count == 0)
+                {
+                    continue;
+                }
+
+                foreach (var item in kvp.Value)
+                {
+                    if (item != null && !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.Slug))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private void HandleDisconnectInternal(string reason)
