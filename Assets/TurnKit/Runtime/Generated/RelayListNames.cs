@@ -11,6 +11,7 @@ namespace TurnKit
         public const string Slug = "example";
 
         public enum List { p1_hidden, p2_hidden, results_public, discard_public }
+        public enum Stat { score }
         public enum Tag { hand, table, discard }
 
         public static readonly Dictionary<List, TurnKitConfig.RelayListConfig> Metadata = new()
@@ -40,13 +41,18 @@ namespace TurnKit
                 visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 }
             } },
         };
+
+        public static readonly Dictionary<Stat, TrackedStatMetadata> StatMetadata = new()
+        {
+            { Stat.score, new TrackedStatMetadata { Name = "score", DataType = TurnKitConfig.TrackedStatDataType.DOUBLE, Scope = TurnKitConfig.TrackedStatScope.PER_PLAYER } },
+        };
     }
 
     public static class Registry
     {
         public static readonly Dictionary<string, Action> Initializers = new()
         {
-            { "example", () => Relay.Instance.InitializeFromMetadata(ExampleConfig.Metadata) }
+            { "example", () => Relay.Instance.InitializeFromMetadata(ExampleConfig.Metadata, ExampleConfig.StatMetadata) }
         };
     }
 }

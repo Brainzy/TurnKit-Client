@@ -31,7 +31,25 @@ namespace TurnKit.Editor
             EditorGUILayout.TextField("Project", config.projectName);
             EditorGUILayout.TextField("Game Key", string.IsNullOrEmpty(config.gameKeyId) ? "Not connected" : config.gameKeyId);
             config.clientKey = EditorGUILayout.TextField("Client Key", config.clientKey);
+            EditorGUILayout.TextField("Default Leaderboard", config.defaultLeaderboard);
             
+            EditorGUILayout.Space(5);
+            config.leaderboards ??= new System.Collections.Generic.List<TurnKitConfig.LeaderboardConfig>();
+            EditorGUILayout.LabelField($"Leaderboards: {config.leaderboards.Count}");
+
+            if (config.leaderboards.Count > 0)
+            {
+                EditorGUI.indentLevel++;
+                foreach (var leaderboard in config.leaderboards)
+                {
+                    string label = string.IsNullOrWhiteSpace(leaderboard.displayName)
+                        ? leaderboard.slug
+                        : $"{leaderboard.displayName} ({leaderboard.slug})";
+                    EditorGUILayout.LabelField($"- {label}");
+                }
+                EditorGUI.indentLevel--;
+            }
+
             EditorGUILayout.Space(5);
             EditorGUILayout.LabelField($"Relay Configs: {config.relayConfigs.Count}");
             

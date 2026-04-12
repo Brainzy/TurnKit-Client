@@ -9,7 +9,9 @@ namespace TurnKit
         SPAWN,
         MOVE,
         REMOVE,
-        SHUFFLE
+        SHUFFLE,
+        SET_STAT,
+        ADD_STAT
     }
 
     public enum SelectorType
@@ -71,6 +73,13 @@ namespace TurnKit
         }
     }
 
+    public sealed class TrackedStatMetadata
+    {
+        public string Name;
+        public TurnKitConfig.TrackedStatDataType DataType;
+        public TurnKitConfig.TrackedStatScope Scope;
+    }
+
     [Serializable]
     internal class RelayAction
     {
@@ -84,6 +93,11 @@ namespace TurnKit
         public int repeat = 1;
         public bool ignoreOwnership;
         public string list;
+        public string statName;
+        public string playerId;
+        public JSONNode value;
+        public double? delta;
+        public string[] values;
 
         public JSONObject ToNode()
         {
@@ -123,6 +137,43 @@ namespace TurnKit
                 case ActionType.SHUFFLE:
                     node["list"] = list;
                     break;
+
+                case ActionType.SET_STAT:
+                    node["statName"] = statName;
+                    if (!string.IsNullOrEmpty(playerId))
+                    {
+                        node["playerId"] = playerId;
+                    }
+
+                    node["value"] = value ?? JSONNull.CreateOrGet();
+                    break;
+
+                case ActionType.ADD_STAT:
+                    node["statName"] = statName;
+                    if (!string.IsNullOrEmpty(playerId))
+                    {
+                        node["playerId"] = playerId;
+                    }
+
+                    if (delta.HasValue)
+                    {
+                        node["delta"] = delta.Value;
+                    }
+                    else if (values != null)
+                    {
+                        var valuesArray = new JSONArray();
+                        foreach (var item in values)
+                        {
+                            valuesArray.Add(item ?? string.Empty);
+                        }
+
+                        node["values"] = valuesArray;
+                    }
+                    else
+                    {
+                        node["values"] = JSONNull.CreateOrGet();
+                    }
+                    break;
             }
 
             return node;
@@ -132,7 +183,7 @@ namespace TurnKit
         {
             var selectorNode = new JSONObject();
             selectorNode["selector"] = selector.ToString();
-          
+
             switch (selector)
             {
                 case SelectorType.BY_ITEM_IDS:

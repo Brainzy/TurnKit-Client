@@ -151,6 +151,19 @@ namespace TurnKit
             Instance.ExecuteQueuedActions(true);
         }
 
+        public static class Stat
+        {
+            public static RelayStatBuilder Match<TStat>(TStat stat) where TStat : Enum
+            {
+                return new RelayStatBuilder(stat.ToString(), null);
+            }
+
+            public static RelayStatBuilder Player<TStat>(TurnKitConfig.PlayerSlot slot, TStat stat) where TStat : Enum
+            {
+                return new RelayStatBuilder(stat.ToString(), slot);
+            }
+        }
+
         public static RelayList List<T>(T listEnum) where T : Enum
         {
             string name = listEnum.ToString();
@@ -226,9 +239,13 @@ namespace TurnKit
             await TurnKitClientRequest.Send(req);
         }
 
-        public void InitializeFromMetadata<T>(Dictionary<T, TurnKitConfig.RelayListConfig> metadata) where T : Enum
+        public void InitializeFromMetadata<TList, TStat>(
+            Dictionary<TList, TurnKitConfig.RelayListConfig> listMetadata,
+            Dictionary<TStat, TrackedStatMetadata> statMetadata)
+            where TList : Enum
+            where TStat : Enum
         {
-            _state.InitializeFromMetadata(metadata);
+            _state.InitializeFromMetadata(listMetadata, statMetadata);
         }
 
         public static bool IsReady => Instance._transport.IsConnected && !Instance._state.IsInSyncWindow;
@@ -276,6 +293,28 @@ namespace TurnKit
         internal void ExecuteRemoveBuilder(RemoveBuilder builder, RelayList fromList, SelectorType selector, string[] data, int repeat, bool ignoreOwnership)
         {
             _commandQueue.QueueRemove(builder, fromList, selector, data, repeat, ignoreOwnership);
+        }
+
+        internal void QueueSetStat(string statName, TurnKitConfig.PlayerSlot? slot, JSONNode value)
+        {
+            if (!_state.TryGetTrackedStatMetadata(statName, out var metadata))
+            {
+                _validator.ValidateTrackedStatMetadata(statName, null);
+                return;
+            }
+
+            _commandQueue.QueueSetStat(metadata, slot, ResolvePlayerId(slot), value);
+        }
+
+        internal void QueueAddStat(string statName, TurnKitConfig.PlayerSlot? slot, double? delta, string[] values)
+        {
+            if (!_state.TryGetTrackedStatMetadata(statName, out var metadata))
+            {
+                _validator.ValidateTrackedStatMetadata(statName, null);
+                return;
+            }
+
+            _commandQueue.QueueAddStat(metadata, slot, ResolvePlayerId(slot), delta, values);
         }
 
         private void ExecuteQueuedActions(bool shouldEndTurn)
@@ -480,6 +519,11 @@ namespace TurnKit
             }
 
             return false;
+        }
+
+        private string ResolvePlayerId(TurnKitConfig.PlayerSlot? slot)
+        {
+            return slot.HasValue ? _state.ResolvePlayerId(slot.Value) : null;
         }
 
         private void HandleDisconnectInternal(string reason)

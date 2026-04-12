@@ -20,6 +20,7 @@ namespace TurnKit
         [Header("Leaderboard")]
         [Tooltip("Default leaderboard slug. A 'global' leaderboard is created automatically for your game key, add more if you need via swagger api.")]
         public string defaultLeaderboard = "global";
+        public List<LeaderboardConfig> leaderboards = new();
 
         [Header("Log")] [Tooltip("OnMatchStarted and similar events will be logged in console.")]
         public bool enableLogging = true;
@@ -45,6 +46,20 @@ namespace TurnKit
         }
         
         [Serializable]
+        public class LeaderboardConfig
+        {
+            public string slug;
+            public string displayName;
+            public string sortOrder;
+            public string scoreStrategy;
+            public double minScore;
+            public double maxScore;
+            public string resetFrequency;
+            public bool archiveOnReset;
+            public string nextResetAt;
+        }
+
+        [Serializable]
         public class RelayConfig
         {
             public string id;
@@ -61,15 +76,56 @@ namespace TurnKit
             public int turnTimeoutSeconds = 60;
             public int waitReconnectSeconds = 45;
             public List<RelayListConfig> lists = new();
+            public List<TrackedStatConfig> trackedStats = new();
         }
     
         [Serializable]
         public class RelayListConfig
         {
+            public string id;
             public string name;
             public string tag;
             public List<PlayerSlot> ownerSlots = new();
             public List<PlayerSlot> visibleToSlots = new();
+        }
+
+        [Serializable]
+        public class TrackedStatConfig
+        {
+            public string id;
+            public string name;
+            public TrackedStatDataType dataType = TrackedStatDataType.DOUBLE;
+            public TrackedStatScope scope = TrackedStatScope.MATCH;
+            public double initialDouble;
+            public string initialString;
+            public List<string> initialList = new();
+            public List<TrackedStatSyncTargetConfig> syncTo = new();
+        }
+
+        [Serializable]
+        public class TrackedStatSyncTargetConfig
+        {
+            public string id;
+            public TrackedStatSyncDestinationType destinationType = TrackedStatSyncDestinationType.LEADERBOARD;
+            public string destinationId;
+        }
+
+        [Serializable]
+        public class WebhookConfig
+        {
+            public string entityId;
+            public string id;
+            public string url;
+            public List<WebhookHeader> headers = new();
+            public string createdAt;
+            public string updatedAt;
+        }
+
+        [Serializable]
+        public class WebhookHeader
+        {
+            public string key;
+            public string value;
         }
     
         public enum PlayerSlot
@@ -100,6 +156,25 @@ namespace TurnKit
         {
             SKIP_TURN,
             END_GAME
+        }
+
+        public enum TrackedStatDataType
+        {
+            DOUBLE,
+            STRING,
+            LIST_STRING
+        }
+
+        public enum TrackedStatScope
+        {
+            PER_PLAYER,
+            MATCH
+        }
+
+        public enum TrackedStatSyncDestinationType
+        {
+            LEADERBOARD,
+            WEBHOOK
         }
     }
 }

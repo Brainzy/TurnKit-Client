@@ -76,6 +76,43 @@ namespace TurnKit
             }
         }
 
+        public void QueueSetStat(TrackedStatMetadata metadata, TurnKitConfig.PlayerSlot? slot, string playerId, JSONNode value)
+        {
+            if (!_validator.ValidateTrackedStatMetadata(metadata?.Name, metadata) ||
+                !_validator.ValidateStatTarget(metadata, slot, playerId) ||
+                !_validator.ValidateSetStat(metadata, value))
+            {
+                return;
+            }
+
+            _queuedActions.Add(new RelayAction
+            {
+                action = ActionType.SET_STAT,
+                statName = metadata.Name,
+                playerId = playerId,
+                value = value
+            });
+        }
+
+        public void QueueAddStat(TrackedStatMetadata metadata, TurnKitConfig.PlayerSlot? slot, string playerId, double? delta, string[] values)
+        {
+            if (!_validator.ValidateTrackedStatMetadata(metadata?.Name, metadata) ||
+                !_validator.ValidateStatTarget(metadata, slot, playerId) ||
+                !_validator.ValidateAddStat(metadata, delta, values))
+            {
+                return;
+            }
+
+            _queuedActions.Add(new RelayAction
+            {
+                action = ActionType.ADD_STAT,
+                statName = metadata.Name,
+                playerId = playerId,
+                delta = delta,
+                values = values
+            });
+        }
+
         public string BuildMovePayload(bool shouldEndTurn)
         {
             ExecutePendingBuilders();

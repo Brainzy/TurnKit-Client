@@ -11,6 +11,7 @@ namespace TurnKit
         private readonly List<RelayList> _allLists = new();
         private readonly Dictionary<string, RelayList> _listsByName = new();
         private readonly Dictionary<string, List<RelayList>> _listsByTag = new();
+        private readonly Dictionary<string, TrackedStatMetadata> _trackedStatsByName = new();
         private readonly List<PlayerInfo> _players = new();
 
         private string _myPlayerId;
@@ -27,11 +28,15 @@ namespace TurnKit
             _myPlayerId = playerId;
         }
 
-        public void InitializeFromMetadata<T>(Dictionary<T, TurnKitConfig.RelayListConfig> metadata) where T : Enum
+        public void InitializeFromMetadata<TList, TStat>(
+            Dictionary<TList, TurnKitConfig.RelayListConfig> listMetadata,
+            Dictionary<TStat, TrackedStatMetadata> statMetadata)
+            where TList : Enum
+            where TStat : Enum
         {
-            ClearLists();
+            ClearMetadata();
 
-            foreach (var kvp in metadata)
+            foreach (var kvp in listMetadata)
             {
                 var relayList = new RelayList
                 {
@@ -42,6 +47,11 @@ namespace TurnKit
                 };
 
                 RegisterList(relayList);
+            }
+
+            foreach (var kvp in statMetadata)
+            {
+                _trackedStatsByName[kvp.Key.ToString()] = kvp.Value;
             }
         }
 
@@ -120,9 +130,19 @@ namespace TurnKit
             return _listsByTag.TryGetValue(tag, out list);
         }
 
+        public bool TryGetTrackedStatMetadata(string statName, out TrackedStatMetadata metadata)
+        {
+            return _trackedStatsByName.TryGetValue(statName, out metadata);
+        }
+
         public PlayerInfo GetPlayerBySlot(TurnKitConfig.PlayerSlot slot)
         {
             return _players.FirstOrDefault(p => p.slot == slot);
+        }
+
+        public string ResolvePlayerId(TurnKitConfig.PlayerSlot slot)
+        {
+            return GetPlayerBySlot(slot)?.playerId;
         }
 
         public void ApplyVisibleChanges(VisibleChange[] changes, Action<RelayList, ListChangeType> notifyListChanged)
@@ -232,44 +252,6 @@ namespace TurnKit
             );
         }
 
-        private List<TurnKitConfig.PlayerSlot> ResolveSlots(
-            List<TurnKitConfig.PlayerSlot> explicitSlots,
-            List<string> playerIds)
-        {
-            if (explicitSlots != null && explicitSlots.Count > 0)
-            {
-                return new List<TurnKitConfig.PlayerSlot>(explicitSlots);
-            }
-
-            return ConvertPlayerIdsToSlots(playerIds);
-        }
-
-        private List<TurnKitConfig.PlayerSlot> ConvertPlayerIdsToSlots(List<string> ids)
-        {
-            var results = new List<TurnKitConfig.PlayerSlot>();
-            if (ids == null)
-            {
-                return results;
-            }
-
-            foreach (var id in ids)
-            {
-                var player = _players.FirstOrDefault(p => p.playerId == id);
-                if (player != null)
-                {
-                    results.Add(player.slot);
-                    continue;
-                }
-
-                if (Enum.TryParse(id, true, out TurnKitConfig.PlayerSlot slot))
-                {
-                    results.Add(slot);
-                }
-            }
-
-            return results;
-        }
-
         private void RegisterList(RelayList relayList)
         {
             _allLists.Add(relayList);
@@ -279,14 +261,16 @@ namespace TurnKit
             {
                 _listsByTag.Add(relayList.Tag, new List<RelayList>());
             }
+
             _listsByTag[relayList.Tag].Add(relayList);
         }
 
-        private void ClearLists()
+        private void ClearMetadata()
         {
             _allLists.Clear();
             _listsByName.Clear();
             _listsByTag.Clear();
+            _trackedStatsByName.Clear();
         }
     }
 }

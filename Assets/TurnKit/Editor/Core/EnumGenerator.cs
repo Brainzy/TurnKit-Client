@@ -36,10 +36,11 @@ namespace TurnKit.Editor
             }
 
             if (!Validate(config))
+            {
                 return;
+            }
 
             var generated = BuildGeneratedContent(config);
-
             string directory = Path.GetDirectoryName(OutputPath);
             if (!Directory.Exists(directory))
             {
@@ -48,21 +49,23 @@ namespace TurnKit.Editor
 
             File.WriteAllText(OutputPath, generated);
             AssetDatabase.Refresh();
-
             Debug.Log($"[TurnKit] Generated relay config enums at {OutputPath}");
         }
 
         public static bool HasChanges(TurnKitConfig config)
         {
             if (config == null || config.relayConfigs == null || config.relayConfigs.Count == 0)
+            {
                 return false;
+            }
 
             if (!File.Exists(OutputPath))
+            {
                 return true;
+            }
 
             string existing = File.ReadAllText(OutputPath);
             string generated = BuildGeneratedContent(config);
-
             return existing != generated;
         }
 
@@ -82,7 +85,10 @@ namespace TurnKit.Editor
 
             foreach (var relay in config.relayConfigs)
             {
-                if (relay == null) continue;
+                if (relay == null)
+                {
+                    continue;
+                }
 
                 string className = ToConfigClassName(relay.slug);
                 generatedClassNames.Add((relay.slug, className));
@@ -90,71 +96,73 @@ namespace TurnKit.Editor
                 sb.AppendLine($"    public static class {className}");
                 sb.AppendLine("    {");
                 sb.AppendLine($"        public const string Slug = \"{relay.slug}\";");
+                sb.AppendLine();
 
-                if (relay.lists != null && relay.lists.Count > 0)
+                string listMembers = relay.lists != null && relay.lists.Count > 0
+                    ? string.Join(", ", relay.lists.Select(l => l.name))
+                    : "__none";
+                string statMembers = relay.trackedStats != null && relay.trackedStats.Count > 0
+                    ? string.Join(", ", relay.trackedStats.Select(s => s.name))
+                    : "__none";
+
+                sb.AppendLine($"        public enum List {{ {listMembers} }}");
+                sb.AppendLine($"        public enum Stat {{ {statMembers} }}");
+
+                var uniqueTags = relay.lists?
+                    .Select(l => l.tag)
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .Distinct()
+                    .ToList() ?? new List<string>();
+                sb.AppendLine($"        public enum Tag {{ {(uniqueTags.Count > 0 ? string.Join(", ", uniqueTags) : "__none")} }}");
+                sb.AppendLine();
+
+                sb.AppendLine("        public static readonly Dictionary<List, TurnKitConfig.RelayListConfig> Metadata = new()");
+                sb.AppendLine("        {");
+                if (relay.lists != null)
                 {
-                    // 1. Generate local Enums
-                    // List Enum: Specific to this Relay
-                    sb.AppendLine();
-                    sb.AppendLine("        public enum List { " + string.Join(", ", relay.lists.Select(l => l.name)) + " }");
-
-                    // Tag Enum: Gather all unique tags used in this specific Relay config
-                    var uniqueTags = relay.lists
-                        .Select(l => l.tag)
-                        .Where(t => !string.IsNullOrEmpty(t))
-                        .Distinct()
-                        .ToList();
-
-                    string tagMembers = uniqueTags.Count > 0 ? string.Join(", ", uniqueTags) : "";
-                    sb.AppendLine($"        public enum Tag {{ {tagMembers} }}");
-
-                    // 2. Generate the Metadata Dictionary
-                    sb.AppendLine();
-                    sb.AppendLine(
-                        $"        public static readonly Dictionary<List, TurnKitConfig.RelayListConfig> Metadata = new()");
-                    sb.AppendLine("        {");
-
                     foreach (var list in relay.lists)
                     {
                         string ownerSlots = string.Join(", ", list.ownerSlots.Select(s => $"TurnKitConfig.PlayerSlot.{s}"));
                         string visibleSlots = string.Join(", ", list.visibleToSlots.Select(s => $"TurnKitConfig.PlayerSlot.{s}"));
-                        string tagEnumValue = $"Tag.{list.tag}";
+                        string tagValue = string.IsNullOrEmpty(list.tag) ? "string.Empty" : $"nameof(Tag.{list.tag})";
 
                         sb.AppendLine($"            {{ List.{list.name}, new TurnKitConfig.RelayListConfig {{");
                         sb.AppendLine($"                name = \"{list.name}\",");
-                        // Use nameof() so the string in the Metadata matches the Enum name perfectly
-                        sb.AppendLine($"                tag = nameof({tagEnumValue}),");
+                        sb.AppendLine($"                tag = {tagValue},");
                         sb.AppendLine($"                ownerSlots = new List<TurnKitConfig.PlayerSlot> {{ {ownerSlots} }},");
-                        sb.AppendLine(
-                            $"                visibleToSlots = new List<TurnKitConfig.PlayerSlot> {{ {visibleSlots} }}");
+                        sb.AppendLine($"                visibleToSlots = new List<TurnKitConfig.PlayerSlot> {{ {visibleSlots} }}");
                         sb.AppendLine("            } },");
                     }
-
-                    sb.AppendLine("        };");
                 }
+                sb.AppendLine("        };");
+                sb.AppendLine();
 
+                sb.AppendLine("        public static readonly Dictionary<Stat, TrackedStatMetadata> StatMetadata = new()");
+                sb.AppendLine("        {");
+                if (relay.trackedStats != null)
+                {
+                    foreach (var stat in relay.trackedStats)
+                    {
+                        sb.AppendLine($"            {{ Stat.{stat.name}, new TrackedStatMetadata {{ Name = \"{stat.name}\", DataType = TurnKitConfig.TrackedStatDataType.{stat.dataType}, Scope = TurnKitConfig.TrackedStatScope.{stat.scope} }} }},");
+                    }
+                }
+                sb.AppendLine("        };");
                 sb.AppendLine("    }");
                 sb.AppendLine();
             }
 
-            // 3. Generate the Unified Registry
             sb.AppendLine("    public static class Registry");
             sb.AppendLine("    {");
             sb.AppendLine("        public static readonly Dictionary<string, Action> Initializers = new()");
             sb.AppendLine("        {");
-
             for (int i = 0; i < generatedClassNames.Count; i++)
             {
                 var item = generatedClassNames[i];
                 string comma = i < generatedClassNames.Count - 1 ? "," : "";
-                // Note: InitializeFromMetadata needs to accept the Dictionary<List, RelayListConfig>
-                sb.AppendLine(
-                    $"            {{ \"{item.Slug}\", () => Relay.Instance.InitializeFromMetadata({item.ClassName}.Metadata) }}{comma}");
+                sb.AppendLine($"            {{ \"{item.Slug}\", () => Relay.Instance.InitializeFromMetadata({item.ClassName}.Metadata, {item.ClassName}.StatMetadata) }}{comma}");
             }
-
             sb.AppendLine("        };");
             sb.AppendLine("    }");
-
             sb.AppendLine("}");
             return sb.ToString();
         }
@@ -191,29 +199,40 @@ namespace TurnKit.Editor
                     return false;
                 }
 
-                if (relay.lists == null)
-                    continue;
-
-                var listNames = new HashSet<string>();
-                foreach (var list in relay.lists)
+                if (!ValidateNames(relay.slug, relay.lists?.Select(l => l?.name), "list"))
                 {
-                    if (list == null)
-                    {
-                        Debug.LogError($"[TurnKit] Relay '{relay.slug}' contains a null list entry.");
-                        return false;
-                    }
+                    return false;
+                }
 
-                    if (!IsValidEnumSafeSlug(list.name, out string error))
-                    {
-                        Debug.LogError($"[TurnKit] Invalid list name '{list.name}' in relay '{relay.slug}'. {error}");
-                        return false;
-                    }
+                if (!ValidateNames(relay.slug, relay.trackedStats?.Select(s => s?.name), "tracked stat"))
+                {
+                    return false;
+                }
+            }
 
-                    if (!listNames.Add(list.name))
-                    {
-                        Debug.LogError($"[TurnKit] Duplicate list name '{list.name}' in relay '{relay.slug}'.");
-                        return false;
-                    }
+            return true;
+        }
+
+        private static bool ValidateNames(string relaySlug, IEnumerable<string> names, string kind)
+        {
+            if (names == null)
+            {
+                return true;
+            }
+
+            var seen = new HashSet<string>();
+            foreach (var name in names)
+            {
+                if (!IsValidEnumSafeSlug(name, out string error))
+                {
+                    Debug.LogError($"[TurnKit] Invalid {kind} name '{name}' in relay '{relaySlug}'. {error}");
+                    return false;
+                }
+
+                if (!seen.Add(name))
+                {
+                    Debug.LogError($"[TurnKit] Duplicate {kind} name '{name}' in relay '{relaySlug}'.");
+                    return false;
                 }
             }
 
@@ -226,13 +245,13 @@ namespace TurnKit.Editor
 
             if (string.IsNullOrWhiteSpace(value))
             {
-                error = "List name cannot be empty.";
+                error = "Name cannot be empty.";
                 return false;
             }
 
             if (value.Length > 64)
             {
-                error = "List name must be 64 characters or less.";
+                error = "Name must be 64 characters or less.";
                 return false;
             }
 
@@ -260,7 +279,9 @@ namespace TurnKit.Editor
         private static string ToConfigClassName(string slug)
         {
             if (string.IsNullOrWhiteSpace(slug))
+            {
                 return "UnnamedConfig";
+            }
 
             string flattened = Regex.Replace(slug, @"[^a-zA-Z0-9]+", " ");
             var parts = flattened.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
@@ -269,18 +290,26 @@ namespace TurnKit.Editor
             foreach (var part in parts)
             {
                 if (part.Length == 0)
+                {
                     continue;
+                }
 
                 sb.Append(char.ToUpperInvariant(part[0]));
                 if (part.Length > 1)
+                {
                     sb.Append(part.Substring(1).ToLowerInvariant());
+                }
             }
 
             if (sb.Length == 0)
+            {
                 sb.Append("Unnamed");
+            }
 
             if (char.IsDigit(sb[0]))
+            {
                 sb.Insert(0, "_");
+            }
 
             sb.Append("Config");
             return sb.ToString();

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEngine;
@@ -142,7 +143,7 @@ namespace TurnKit.Editor
                     string responseText = request.downloadHandler.text;
                     try
                     {
-                        var response = JsonUtility.FromJson<TurnKitAPI.AuthResponse>(responseText);
+                        var response = TurnKitAPI.ParseAuthResponse(responseText);
                         
                         EditorApplication.update -= PollUpdate;
                         isPolling = false;
@@ -192,7 +193,9 @@ namespace TurnKit.Editor
                 config.clientKey = response.selectedClientKey;
             }
             
+            config.leaderboards = response.leaderboards ?? new System.Collections.Generic.List<TurnKitConfig.LeaderboardConfig>();
             config.relayConfigs = response.relayConfigs ?? new System.Collections.Generic.List<TurnKitConfig.RelayConfig>();
+            config.defaultLeaderboard = ResolveDefaultLeaderboard(config.defaultLeaderboard, config.leaderboards);
             
             EditorUtility.SetDirty(config);
             AssetDatabase.SaveAssets();
@@ -202,6 +205,7 @@ namespace TurnKit.Editor
                 EditorUtility.DisplayDialog(
                     "Welcome Back!",
                     $"Connected to project: {response.gameKey.name}\n\n" +
+                    $"Synced {config.leaderboards.Count} leaderboard(s).\n" +
                     $"Synced {response.relayConfigs.Count} relay config(s).\n\n" +
                     "Your existing client key has been preserved.",
                     "OK"
@@ -217,6 +221,29 @@ namespace TurnKit.Editor
         {
             Debug.LogError($"[TurnKit] Auth failed: {error}");
             EditorUtility.DisplayDialog("Authentication Failed", error, "OK");
+        }
+
+        private static string ResolveDefaultLeaderboard(string currentDefault, System.Collections.Generic.List<TurnKitConfig.LeaderboardConfig> leaderboards)
+        {
+            if (leaderboards == null || leaderboards.Count == 0)
+            {
+                return currentDefault;
+            }
+
+            if (!string.IsNullOrWhiteSpace(currentDefault) &&
+                leaderboards.Any(lb => string.Equals(lb.slug, currentDefault, StringComparison.Ordinal)))
+            {
+                return currentDefault;
+            }
+
+            var global = leaderboards.FirstOrDefault(lb => string.Equals(lb.slug, "global", StringComparison.Ordinal));
+            if (global != null && !string.IsNullOrWhiteSpace(global.slug))
+            {
+                return global.slug;
+            }
+
+            var first = leaderboards.FirstOrDefault(lb => !string.IsNullOrWhiteSpace(lb.slug));
+            return first != null ? first.slug : currentDefault;
         }
 
         internal static TurnKitConfig LoadOrCreateConfig()
