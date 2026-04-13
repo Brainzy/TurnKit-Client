@@ -179,6 +179,12 @@ namespace TurnKit.Editor
                 list.tag = EditorGUILayout.TextField("Tag", list.tag);
                 EditorGUIUtility.labelWidth = originalLabelWidth;
                 EditorGUILayout.EndHorizontal();
+                EditorGUILayout.LabelField("Slug format example: some_variable", EditorStyles.miniLabel);
+                DrawSlugValidation("List name", list.name);
+                if (!string.IsNullOrWhiteSpace(list.tag))
+                {
+                    DrawSlugValidation("Tag", list.tag);
+                }
                 GUILayout.Space(8);
 
                 if (!relay.ignoreAllOwnership)
@@ -288,6 +294,8 @@ namespace TurnKit.Editor
             {
                 EditorGUI.indentLevel++;
                 stat.name = EditorGUILayout.TextField("Name", stat.name);
+                EditorGUILayout.LabelField("C# identifier example: SomeVariable", EditorStyles.miniLabel);
+                DrawTrackedStatValidation(stat.name);
                 stat.dataType = (TurnKitConfig.TrackedStatDataType)EditorGUILayout.EnumPopup("Data Type", stat.dataType);
                 stat.scope = (TurnKitConfig.TrackedStatScope)EditorGUILayout.EnumPopup("Scope", stat.scope);
                 DrawInitialValue(stat);
@@ -356,7 +364,12 @@ namespace TurnKit.Editor
                 var target = stat.syncTo[i];
                 EditorGUILayout.BeginVertical(EditorStyles.helpBox);
                 EditorGUILayout.BeginHorizontal();
+                var previousDestinationType = target.destinationType;
                 target.destinationType = (TurnKitConfig.TrackedStatSyncDestinationType)EditorGUILayout.EnumPopup("Destination", target.destinationType);
+                if (previousDestinationType != target.destinationType)
+                {
+                    target.destinationId = null;
+                }
                 if (GUILayout.Button("Remove", GUILayout.Width(70)))
                 {
                     stat.syncTo.RemoveAt(i);
@@ -403,8 +416,6 @@ namespace TurnKit.Editor
             int selectedIndex = Mathf.Max(0, ids.IndexOf(target.destinationId ?? string.Empty));
             int newIndex = EditorGUILayout.Popup("Leaderboard", selectedIndex, options);
             target.destinationId = ids[newIndex];
-
-            target.destinationId = EditorGUILayout.TextField("Override", target.destinationId ?? string.Empty);
         }
 
         private void DrawWebhookDestinationField(TurnKitConfig.TrackedStatSyncTargetConfig target)
@@ -412,16 +423,22 @@ namespace TurnKit.Editor
             var ids = webhooks.Select(w => w.id).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().OrderBy(id => id).ToList();
             if (ids.Count == 0)
             {
-                target.destinationId = EditorGUILayout.TextField("Webhook Id", target.destinationId ?? string.Empty);
-                EditorGUILayout.HelpBox("No webhooks loaded. Refresh webhooks or type an existing id manually.", MessageType.Info);
+                target.destinationId = null;
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUILayout.TextField("Webhook Id", string.Empty);
+                EditorGUI.EndDisabledGroup();
+                EditorGUILayout.HelpBox("No webhooks available. Create or refresh webhooks before adding a webhook sync target.", MessageType.Warning);
                 return;
+            }
+
+            if (!ids.Contains(target.destinationId))
+            {
+                target.destinationId = ids[0];
             }
 
             int selectedIndex = Mathf.Max(0, ids.IndexOf(target.destinationId ?? string.Empty));
             int newIndex = EditorGUILayout.Popup("Webhook Id", selectedIndex, ids.ToArray());
             target.destinationId = ids[newIndex];
-
-            target.destinationId = EditorGUILayout.TextField("Override", target.destinationId ?? string.Empty);
         }
 
         private void DrawSlotToggles(List<TurnKitConfig.PlayerSlot> slots)
@@ -441,18 +458,52 @@ namespace TurnKit.Editor
 
         private void DrawActions()
         {
+            var canSave = TurnKitConfigValidator.TryValidateRelay(config, relay, out var errors);
+            if (!canSave)
+            {
+                EditorGUILayout.HelpBox(TurnKitConfigValidator.BuildErrorSummary(errors), MessageType.Error);
+            }
+
             EditorGUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Cancel", GUILayout.Width(100), GUILayout.Height(32))) Close();
             GUILayout.Space(5);
+            EditorGUI.BeginDisabledGroup(!canSave);
             if (GUILayout.Button("Save Changes", GUILayout.Width(120), GUILayout.Height(32)))
             {
+                if (!TurnKitConfigValidator.TryValidateRelay(config, relay, out var latestErrors))
+                {
+                    EditorUtility.DisplayDialog("Validation Errors", "Fix validation errors before saving:\n\n" + string.Join("\n", latestErrors), "OK");
+                    return;
+                }
+
                 EditorUtility.SetDirty(config);
                 AssetDatabase.SaveAssets();
                 Debug.Log($"[TurnKit] Saved changes to {relay.slug}");
                 Close();
             }
+            EditorGUI.EndDisabledGroup();
             EditorGUILayout.EndHorizontal();
+        }
+
+        private static void DrawSlugValidation(string label, string value)
+        {
+            if (TurnKitConfigValidator.TryGetSlugNameError(value, out string error))
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox($"{label}: {error}", MessageType.Warning);
+        }
+
+        private static void DrawTrackedStatValidation(string value)
+        {
+            if (TurnKitConfigValidator.TryGetTrackedStatNameError(value, out string error))
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox($"Tracked stat name: {error}", MessageType.Warning);
         }
 
         private void MirrorLists()
@@ -535,6 +586,20 @@ namespace TurnKit.Editor
                     error => Debug.LogWarning($"[TurnKit] Failed to load webhooks: {error}")
                 )
             );
+        }
+
+        internal void ReloadWebhooks()
+        {
+            LoadWebhooks();
+        }
+
+        internal static void ReloadAllOpenWebhookLists()
+        {
+            foreach (var window in Resources.FindObjectsOfTypeAll<RelayConfigEditWindow>())
+            {
+                window.ReloadWebhooks();
+                window.Repaint();
+            }
         }
 
         private void NormalizeRelayConfig()

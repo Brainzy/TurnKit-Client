@@ -28,11 +28,10 @@ namespace TurnKit
             _myPlayerId = playerId;
         }
 
-        public void InitializeFromMetadata<TList, TStat>(
+        public void InitializeFromMetadata<TList>(
             Dictionary<TList, TurnKitConfig.RelayListConfig> listMetadata,
-            Dictionary<TStat, TrackedStatMetadata> statMetadata)
+            Dictionary<string, TrackedStatMetadata> statMetadata)
             where TList : Enum
-            where TStat : Enum
         {
             ClearMetadata();
 
@@ -51,7 +50,7 @@ namespace TurnKit
 
             foreach (var kvp in statMetadata)
             {
-                _trackedStatsByName[kvp.Key.ToString()] = kvp.Value;
+                _trackedStatsByName[kvp.Key] = kvp.Value;
             }
         }
 
@@ -137,7 +136,15 @@ namespace TurnKit
 
         public PlayerInfo GetPlayerBySlot(TurnKitConfig.PlayerSlot slot)
         {
-            return _players.FirstOrDefault(p => p.slot == slot);
+            foreach (var player in _players)
+            {
+                if (player.slot == slot)
+                {
+                    return player;
+                }
+            }
+
+            return null;
         }
 
         public string ResolvePlayerId(TurnKitConfig.PlayerSlot slot)

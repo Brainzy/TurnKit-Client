@@ -547,78 +547,7 @@ namespace TurnKit.Editor
 
         private bool ValidateConfigs()
         {
-            var errors = new List<string>();
-            var slugs = new HashSet<string>();
-            foreach (var relay in config.relayConfigs)
-            {
-                NormalizeRelayConfig(relay);
-                if (slugs.Contains(relay.slug))
-                {
-                    errors.Add($"Duplicate slug: {relay.slug}");
-                }
-                slugs.Add(relay.slug);
-
-                if (relay.votingEnabled)
-                {
-                    if (relay.votesRequired > relay.maxPlayers)
-                    {
-                        errors.Add($"{relay.slug}: Votes required ({relay.votesRequired}) exceeds max players ({relay.maxPlayers})");
-                    }
-                    if (relay.votesToFail > relay.maxPlayers)
-                    {
-                        errors.Add($"{relay.slug}: Votes to fail ({relay.votesToFail}) exceeds max players ({relay.maxPlayers})");
-                    }
-                    if (relay.votingMode == TurnKitConfig.VotingMode.ASYNC && relay.failAction == TurnKitConfig.FailAction.END_GAME)
-                    {
-                        errors.Add($"{relay.slug}: ASYNC voting cannot use END_GAME fail action");
-                    }
-                }
-
-                var listNames = new HashSet<string>();
-                foreach (var list in relay.lists)
-                {
-                    if (listNames.Contains(list.name))
-                    {
-                        errors.Add($"{relay.slug}: Duplicate list name: {list.name}");
-                    }
-                    listNames.Add(list.name);
-                    list.ownerSlots.RemoveAll(slot => (int)slot < 1 || (int)slot > relay.maxPlayers);
-                    list.visibleToSlots.RemoveAll(slot => (int)slot < 1 || (int)slot > relay.maxPlayers);
-                }
-
-                var statNames = new HashSet<string>();
-                foreach (var stat in relay.trackedStats)
-                {
-                    if (statNames.Contains(stat.name))
-                    {
-                        errors.Add($"{relay.slug}: Duplicate tracked stat name: {stat.name}");
-                    }
-                    statNames.Add(stat.name);
-
-                    if (stat.syncTo == null)
-                    {
-                        continue;
-                    }
-
-                    foreach (var target in stat.syncTo)
-                    {
-                        if (string.IsNullOrWhiteSpace(target.destinationId))
-                        {
-                            errors.Add($"{relay.slug}: Tracked stat '{stat.name}' has a sync target with an empty destination id");
-                        }
-
-                        if (target.destinationType == TurnKitConfig.TrackedStatSyncDestinationType.LEADERBOARD)
-                        {
-                            if (stat.dataType != TurnKitConfig.TrackedStatDataType.DOUBLE || stat.scope != TurnKitConfig.TrackedStatScope.PER_PLAYER)
-                            {
-                                errors.Add($"{relay.slug}: Tracked stat '{stat.name}' must be PER_PLAYER DOUBLE to sync to a leaderboard");
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (errors.Count > 0)
+            if (!TurnKitConfigValidator.TryValidateConfig(config, out var errors))
             {
                 string message = "Validation failed:\n\n" + string.Join("\n", errors);
                 EditorUtility.DisplayDialog("Validation Errors", message, "OK");
@@ -731,6 +660,9 @@ namespace TurnKit.Editor
             {
                 webhooks.Add(saved);
             }
+
+            LoadWebhooks();
+            RelayConfigEditWindow.ReloadAllOpenWebhookLists();
             Repaint();
         }
 
@@ -756,6 +688,8 @@ namespace TurnKit.Editor
                     () =>
                     {
                         webhooks.Remove(webhook);
+                        LoadWebhooks();
+                        RelayConfigEditWindow.ReloadAllOpenWebhookLists();
                         Repaint();
                     },
                     ShowWebhookError));

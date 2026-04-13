@@ -11,10 +11,9 @@ namespace TurnKit
         public const string Slug = "example";
 
         public enum List { p1_hidden, p2_hidden, results_public, discard_public }
-        public enum Stat { score }
         public enum Tag { hand, table, discard }
 
-        public static readonly Dictionary<List, TurnKitConfig.RelayListConfig> Metadata = new()
+        internal static readonly Dictionary<List, TurnKitConfig.RelayListConfig> ListMetadata = new()
         {
             { List.p1_hidden, new TurnKitConfig.RelayListConfig {
                 name = "p1_hidden",
@@ -42,17 +41,26 @@ namespace TurnKit
             } },
         };
 
-        public static readonly Dictionary<Stat, TrackedStatMetadata> StatMetadata = new()
+        internal static readonly Dictionary<string, TrackedStatMetadata> StatMetadata = new()
         {
-            { Stat.score, new TrackedStatMetadata { Name = "score", DataType = TurnKitConfig.TrackedStatDataType.DOUBLE, Scope = TurnKitConfig.TrackedStatScope.PER_PLAYER } },
+            { "Score", new TrackedStatMetadata { Name = "Score", DataType = TurnKitConfig.TrackedStatDataType.DOUBLE, Scope = TurnKitConfig.TrackedStatScope.PER_PLAYER } },
+            { "Something", new TrackedStatMetadata { Name = "Something", DataType = TurnKitConfig.TrackedStatDataType.STRING, Scope = TurnKitConfig.TrackedStatScope.MATCH } },
+            { "ListOfStrings", new TrackedStatMetadata { Name = "ListOfStrings", DataType = TurnKitConfig.TrackedStatDataType.LIST_STRING, Scope = TurnKitConfig.TrackedStatScope.MATCH } },
         };
+
+        public static class Stats
+        {
+            public static readonly PlayerStatToken<double, DoubleStatBuilder> Score = new(StatMetadata["Score"]);
+            public static readonly MatchStatToken<string, StringStatBuilder> Something = new(StatMetadata["Something"]);
+            public static readonly MatchStatToken<IReadOnlyList<string>, ListStringStatBuilder> ListOfStrings = new(StatMetadata["ListOfStrings"]);
+        }
     }
 
-    public static class Registry
+    internal static class Registry
     {
         public static readonly Dictionary<string, Action> Initializers = new()
         {
-            { "example", () => Relay.Instance.InitializeFromMetadata(ExampleConfig.Metadata, ExampleConfig.StatMetadata) }
+            { "example", () => Relay.Instance.InitializeFromMetadata(ExampleConfig.ListMetadata, ExampleConfig.StatMetadata) }
         };
     }
 }

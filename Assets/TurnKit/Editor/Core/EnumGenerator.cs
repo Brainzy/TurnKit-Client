@@ -12,21 +12,6 @@ namespace TurnKit.Editor
     {
         private const string OutputPath = "Assets/TurnKit/Runtime/Generated/RelayListNames.cs";
 
-        private static readonly HashSet<string> ReservedListNames = new()
-        {
-            "abstract","as","base","bool","break","byte","case","catch","char","checked","class","const",
-            "continue","decimal","default","delegate","do","double","else","enum","event","explicit",
-            "extern","false","finally","fixed","float","for","foreach","goto","if","implicit","in","int",
-            "interface","internal","is","lock","long","namespace","new","null","object","operator","out",
-            "override","params","private","protected","public","readonly","ref","return","sbyte","sealed",
-            "short","sizeof","stackalloc","static","string","struct","switch","this","throw","true","try",
-            "typeof","uint","ulong","unchecked","unsafe","ushort","using","virtual","void","volatile","while",
-            "add","alias","ascending","async","await","by","descending","dynamic","equals","from","get",
-            "global","group","init","into","join","let","managed","nameof","nint","not","notnull","nuint",
-            "on","or","orderby","partial","record","remove","required","scoped","select","set","unmanaged",
-            "value","var","when","where","with","yield", "spawn"
-        };
-
         public static void Generate(TurnKitConfig config)
         {
             if (config == null || config.relayConfigs == null || config.relayConfigs.Count == 0)
@@ -101,12 +86,7 @@ namespace TurnKit.Editor
                 string listMembers = relay.lists != null && relay.lists.Count > 0
                     ? string.Join(", ", relay.lists.Select(l => l.name))
                     : "__none";
-                string statMembers = relay.trackedStats != null && relay.trackedStats.Count > 0
-                    ? string.Join(", ", relay.trackedStats.Select(s => s.name))
-                    : "__none";
-
                 sb.AppendLine($"        public enum List {{ {listMembers} }}");
-                sb.AppendLine($"        public enum Stat {{ {statMembers} }}");
 
                 var uniqueTags = relay.lists?
                     .Select(l => l.tag)
@@ -116,7 +96,7 @@ namespace TurnKit.Editor
                 sb.AppendLine($"        public enum Tag {{ {(uniqueTags.Count > 0 ? string.Join(", ", uniqueTags) : "__none")} }}");
                 sb.AppendLine();
 
-                sb.AppendLine("        public static readonly Dictionary<List, TurnKitConfig.RelayListConfig> Metadata = new()");
+                sb.AppendLine("        internal static readonly Dictionary<List, TurnKitConfig.RelayListConfig> ListMetadata = new()");
                 sb.AppendLine("        {");
                 if (relay.lists != null)
                 {
@@ -137,21 +117,58 @@ namespace TurnKit.Editor
                 sb.AppendLine("        };");
                 sb.AppendLine();
 
-                sb.AppendLine("        public static readonly Dictionary<Stat, TrackedStatMetadata> StatMetadata = new()");
+                sb.AppendLine("        internal static readonly Dictionary<string, TrackedStatMetadata> StatMetadata = new()");
                 sb.AppendLine("        {");
                 if (relay.trackedStats != null)
                 {
                     foreach (var stat in relay.trackedStats)
                     {
-                        sb.AppendLine($"            {{ Stat.{stat.name}, new TrackedStatMetadata {{ Name = \"{stat.name}\", DataType = TurnKitConfig.TrackedStatDataType.{stat.dataType}, Scope = TurnKitConfig.TrackedStatScope.{stat.scope} }} }},");
+                        sb.AppendLine($"            {{ \"{stat.name}\", new TrackedStatMetadata {{ Name = \"{stat.name}\", DataType = TurnKitConfig.TrackedStatDataType.{stat.dataType}, Scope = TurnKitConfig.TrackedStatScope.{stat.scope} }} }},");
                     }
                 }
                 sb.AppendLine("        };");
+
+                if (relay.trackedStats != null && relay.trackedStats.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("        public static class Stats");
+                    sb.AppendLine("        {");
+                    foreach (var stat in relay.trackedStats)
+                    {
+                        string builderType = stat.dataType switch
+                        {
+                            TurnKitConfig.TrackedStatDataType.DOUBLE => "DoubleStatBuilder",
+                            TurnKitConfig.TrackedStatDataType.STRING => "StringStatBuilder",
+                            TurnKitConfig.TrackedStatDataType.LIST_STRING => "ListStringStatBuilder",
+                            _ => null
+                        };
+
+                        string valueType = stat.dataType switch
+                        {
+                            TurnKitConfig.TrackedStatDataType.DOUBLE => "double",
+                            TurnKitConfig.TrackedStatDataType.STRING => "string",
+                            TurnKitConfig.TrackedStatDataType.LIST_STRING => "IReadOnlyList<string>",
+                            _ => null
+                        };
+
+                        if (string.IsNullOrEmpty(builderType) || string.IsNullOrEmpty(valueType))
+                        {
+                            continue;
+                        }
+
+                        string memberName = ToEnumMemberName(stat.name);
+                        string tokenType = stat.scope == TurnKitConfig.TrackedStatScope.PER_PLAYER
+                            ? $"PlayerStatToken<{valueType}, {builderType}>"
+                            : $"MatchStatToken<{valueType}, {builderType}>";
+                        sb.AppendLine($"            public static readonly {tokenType} {memberName} = new(StatMetadata[\"{stat.name}\"]);");
+                    }
+                    sb.AppendLine("        }");
+                }
                 sb.AppendLine("    }");
                 sb.AppendLine();
             }
 
-            sb.AppendLine("    public static class Registry");
+            sb.AppendLine("    internal static class Registry");
             sb.AppendLine("    {");
             sb.AppendLine("        public static readonly Dictionary<string, Action> Initializers = new()");
             sb.AppendLine("        {");
@@ -159,7 +176,7 @@ namespace TurnKit.Editor
             {
                 var item = generatedClassNames[i];
                 string comma = i < generatedClassNames.Count - 1 ? "," : "";
-                sb.AppendLine($"            {{ \"{item.Slug}\", () => Relay.Instance.InitializeFromMetadata({item.ClassName}.Metadata, {item.ClassName}.StatMetadata) }}{comma}");
+                sb.AppendLine($"            {{ \"{item.Slug}\", () => Relay.Instance.InitializeFromMetadata({item.ClassName}.ListMetadata, {item.ClassName}.StatMetadata) }}{comma}");
             }
             sb.AppendLine("        };");
             sb.AppendLine("    }");
@@ -167,116 +184,18 @@ namespace TurnKit.Editor
             return sb.ToString();
         }
 
-        private static bool Validate(TurnKitConfig config)
+        internal static bool Validate(TurnKitConfig config)
         {
-            var relaySlugs = new HashSet<string>();
-            var relayClassNames = new HashSet<string>();
-
-            foreach (var relay in config.relayConfigs)
-            {
-                if (relay == null)
-                {
-                    Debug.LogError("[TurnKit] Relay config contains a null entry.");
-                    return false;
-                }
-
-                if (string.IsNullOrWhiteSpace(relay.slug))
-                {
-                    Debug.LogError("[TurnKit] Relay config slug cannot be empty.");
-                    return false;
-                }
-
-                if (!relaySlugs.Add(relay.slug))
-                {
-                    Debug.LogError($"[TurnKit] Duplicate relay config slug '{relay.slug}'.");
-                    return false;
-                }
-
-                string className = ToConfigClassName(relay.slug);
-                if (!relayClassNames.Add(className))
-                {
-                    Debug.LogError($"[TurnKit] Relay config class name collision. Multiple slugs generate the same class '{className}'.");
-                    return false;
-                }
-
-                if (!ValidateNames(relay.slug, relay.lists?.Select(l => l?.name), "list"))
-                {
-                    return false;
-                }
-
-                if (!ValidateNames(relay.slug, relay.trackedStats?.Select(s => s?.name), "tracked stat"))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool ValidateNames(string relaySlug, IEnumerable<string> names, string kind)
-        {
-            if (names == null)
+            if (TurnKitConfigValidator.TryValidateConfig(config, out var errors))
             {
                 return true;
             }
 
-            var seen = new HashSet<string>();
-            foreach (var name in names)
-            {
-                if (!IsValidEnumSafeSlug(name, out string error))
-                {
-                    Debug.LogError($"[TurnKit] Invalid {kind} name '{name}' in relay '{relaySlug}'. {error}");
-                    return false;
-                }
-
-                if (!seen.Add(name))
-                {
-                    Debug.LogError($"[TurnKit] Duplicate {kind} name '{name}' in relay '{relaySlug}'.");
-                    return false;
-                }
-            }
-
-            return true;
+            TurnKitConfigValidator.LogErrors(errors);
+            return false;
         }
 
-        private static bool IsValidEnumSafeSlug(string value, out string error)
-        {
-            error = null;
-
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                error = "Name cannot be empty.";
-                return false;
-            }
-
-            if (value.Length > 64)
-            {
-                error = "Name must be 64 characters or less.";
-                return false;
-            }
-
-            if (!Regex.IsMatch(value, "^[a-z][a-z0-9_]*$"))
-            {
-                error = "Use lowercase letters, numbers, and underscores only, and start with a letter.";
-                return false;
-            }
-
-            if (value.Contains("__"))
-            {
-                error = "Double underscores are not allowed.";
-                return false;
-            }
-
-            if (ReservedListNames.Contains(value))
-            {
-                error = "This name is reserved in C# and cannot be used.";
-                return false;
-            }
-
-            return true;
-        }
-
-        private static string ToConfigClassName(string slug)
+        internal static string ToConfigClassName(string slug)
         {
             if (string.IsNullOrWhiteSpace(slug))
             {
@@ -312,6 +231,42 @@ namespace TurnKit.Editor
             }
 
             sb.Append("Config");
+            return sb.ToString();
+        }
+
+        internal static string ToEnumMemberName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "Unnamed";
+            }
+
+            var parts = value.Split(new[] { '_' }, System.StringSplitOptions.RemoveEmptyEntries);
+            var sb = new StringBuilder();
+            foreach (var part in parts)
+            {
+                if (part.Length == 0)
+                {
+                    continue;
+                }
+
+                sb.Append(char.ToUpperInvariant(part[0]));
+                if (part.Length > 1)
+                {
+                    sb.Append(part.Substring(1));
+                }
+            }
+
+            if (sb.Length == 0)
+            {
+                sb.Append("Unnamed");
+            }
+
+            if (char.IsDigit(sb[0]))
+            {
+                sb.Insert(0, "_");
+            }
+
             return sb.ToString();
         }
     }

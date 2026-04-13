@@ -151,17 +151,14 @@ namespace TurnKit
             Instance.ExecuteQueuedActions(true);
         }
 
-        public static class Stat
+        public static TBuilder Stat<TValue, TBuilder>(MatchStatToken<TValue, TBuilder> token)
         {
-            public static RelayStatBuilder Match<TStat>(TStat stat) where TStat : Enum
-            {
-                return new RelayStatBuilder(stat.ToString(), null);
-            }
+            return Instance.CreateStatBuilder<TBuilder>(token.GetMetadata(), null);
+        }
 
-            public static RelayStatBuilder Player<TStat>(TurnKitConfig.PlayerSlot slot, TStat stat) where TStat : Enum
-            {
-                return new RelayStatBuilder(stat.ToString(), slot);
-            }
+        public static PlayerStatTargetBuilder<TValue, TBuilder> Stat<TValue, TBuilder>(PlayerStatToken<TValue, TBuilder> token)
+        {
+            return new PlayerStatTargetBuilder<TValue, TBuilder>(token.GetMetadata());
         }
 
         public static RelayList List<T>(T listEnum) where T : Enum
@@ -239,11 +236,10 @@ namespace TurnKit
             await TurnKitClientRequest.Send(req);
         }
 
-        public void InitializeFromMetadata<TList, TStat>(
+        public void InitializeFromMetadata<TList>(
             Dictionary<TList, TurnKitConfig.RelayListConfig> listMetadata,
-            Dictionary<TStat, TrackedStatMetadata> statMetadata)
+            Dictionary<string, TrackedStatMetadata> statMetadata)
             where TList : Enum
-            where TStat : Enum
         {
             _state.InitializeFromMetadata(listMetadata, statMetadata);
         }
@@ -295,26 +291,55 @@ namespace TurnKit
             _commandQueue.QueueRemove(builder, fromList, selector, data, repeat, ignoreOwnership);
         }
 
-        internal void QueueSetStat(string statName, TurnKitConfig.PlayerSlot? slot, JSONNode value)
+        internal void QueueSetStat(TrackedStatMetadata metadata, TurnKitConfig.PlayerSlot? slot, JSONNode value)
         {
-            if (!_state.TryGetTrackedStatMetadata(statName, out var metadata))
+            if (!_validator.ValidateTrackedStatMetadata(metadata?.Name, metadata))
             {
-                _validator.ValidateTrackedStatMetadata(statName, null);
                 return;
             }
 
             _commandQueue.QueueSetStat(metadata, slot, ResolvePlayerId(slot), value);
         }
 
-        internal void QueueAddStat(string statName, TurnKitConfig.PlayerSlot? slot, double? delta, string[] values)
+        internal void QueueAddStat(TrackedStatMetadata metadata, TurnKitConfig.PlayerSlot? slot, double? delta, string[] values)
         {
-            if (!_state.TryGetTrackedStatMetadata(statName, out var metadata))
+            if (!_validator.ValidateTrackedStatMetadata(metadata?.Name, metadata))
             {
-                _validator.ValidateTrackedStatMetadata(statName, null);
                 return;
             }
 
             _commandQueue.QueueAddStat(metadata, slot, ResolvePlayerId(slot), delta, values);
+        }
+
+        internal TBuilder CreateStatBuilder<TBuilder>(TrackedStatMetadata metadata, TurnKitConfig.PlayerSlot? slot)
+        {
+            if (metadata == null)
+            {
+                throw new InvalidOperationException("[TurnKit] Stat token is not initialized.");
+            }
+
+            bool expectsPlayer = metadata.Scope == TurnKitConfig.TrackedStatScope.PER_PLAYER;
+            if (expectsPlayer != slot.HasValue)
+            {
+                string targetKind = expectsPlayer ? "requires" : "must not target";
+                string targetName = expectsPlayer ? "a player slot" : "a player";
+                throw new InvalidOperationException($"[TurnKit] Stat '{metadata.Name}' {targetKind} {targetName}.");
+            }
+
+            object builder = metadata.DataType switch
+            {
+                TurnKitConfig.TrackedStatDataType.DOUBLE => new DoubleStatBuilder(metadata, slot),
+                TurnKitConfig.TrackedStatDataType.STRING => new StringStatBuilder(metadata, slot),
+                TurnKitConfig.TrackedStatDataType.LIST_STRING => new ListStringStatBuilder(metadata, slot),
+                _ => throw new InvalidOperationException($"[TurnKit] Unsupported tracked stat type '{metadata.DataType}' for '{metadata.Name}'.")
+            };
+
+            if (builder is TBuilder typedBuilder)
+            {
+                return typedBuilder;
+            }
+
+            throw new InvalidOperationException($"[TurnKit] Stat '{metadata.Name}' does not map to builder type '{typeof(TBuilder).Name}'.");
         }
 
         private void ExecuteQueuedActions(bool shouldEndTurn)
@@ -393,7 +418,7 @@ namespace TurnKit
                     OnMoveMade?.Invoke(outcome.MoveMade, _state.AllLists);
                     if (TurnKitConfig.Instance.enableLogging)
                     {
-                        Debug.Log($"TurnKit - MoveMade #{outcome.MoveMade.moveNumber} from {outcome.MoveMade.playerId}");
+                        Debug.Log($"TurnKit - MoveMade #{outcome.MoveMade.moveNumber} from {outcome.MoveMade.actingPlayerId}");
                     }
 
                     break;

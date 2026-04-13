@@ -271,13 +271,93 @@ namespace TurnKit
     }
 
     [Serializable]
+    public abstract class StatChange
+    {
+        public string StatName { get; internal set; }
+        public string PlayerId { get; internal set; }
+
+        public bool IsMatchStat => string.IsNullOrEmpty(PlayerId);
+        public abstract object OldValueObject { get; }
+        public abstract object ValueObject { get; }
+    }
+
+    [Serializable]
+    public sealed class StatChange<T> : StatChange
+    {
+        public T OldValue { get; internal set; }
+        public T Value { get; internal set; }
+
+        public override object OldValueObject => OldValue;
+        public override object ValueObject => Value;
+    }
+
+    [Serializable]
+    public sealed class TypedStatChangeCollection
+    {
+        private readonly List<StatChange<double>> _doubleChanges = new();
+        private readonly List<StatChange<string>> _stringChanges = new();
+        private readonly List<StatChange<IReadOnlyList<string>>> _listChanges = new();
+        private readonly List<StatChange> _allChanges = new();
+        private readonly Dictionary<string, StatChange> _changesByName = new();
+
+        public IReadOnlyList<StatChange<double>> doubleChanges => _doubleChanges;
+        public IReadOnlyList<StatChange<string>> stringChanges => _stringChanges;
+        public IReadOnlyList<StatChange<IReadOnlyList<string>>> listChanges => _listChanges;
+        public IReadOnlyList<StatChange> allChanges => _allChanges;
+
+        internal void AddStatChange(StatChange change)
+        {
+            if (change == null)
+            {
+                return;
+            }
+
+            _allChanges.Add(change);
+            _changesByName[change.StatName] = change;
+
+            switch (change)
+            {
+                case StatChange<double> numberChange:
+                    _doubleChanges.Add(numberChange);
+                    break;
+                case StatChange<string> stringChange:
+                    _stringChanges.Add(stringChange);
+                    break;
+                case StatChange<IReadOnlyList<string>> listChange:
+                    _listChanges.Add(listChange);
+                    break;
+            }
+        }
+
+        private bool TryGetInternal<T>(string statName, out StatChange<T> change)
+        {
+            if (_changesByName.TryGetValue(statName, out var storedChange) && storedChange is StatChange<T> typedChange)
+            {
+                change = typedChange;
+                return true;
+            }
+
+            change = null;
+            return false;
+        }
+
+        public bool TryGet<T>(IStatToken<T> token, out StatChange<T> change)
+        {
+            return TryGetInternal(token.Name, out change);
+        }
+    }
+
+    [Serializable]
     public class MoveMadeMessage
     {
         public string type;
-        public string playerId;
+        public string actingPlayerId;
         public int moveNumber;
         public string json;
         public VisibleChange[] changes;
+        public readonly TypedStatChangeCollection statChanges = new();
+
+        public string playerId => actingPlayerId;
     }
 
     [Serializable]
