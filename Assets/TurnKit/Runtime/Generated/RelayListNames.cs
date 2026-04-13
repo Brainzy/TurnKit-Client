@@ -43,16 +43,12 @@ namespace TurnKit
 
         internal static readonly Dictionary<string, TrackedStatMetadata> StatMetadata = new()
         {
-            { "Score", new TrackedStatMetadata { Name = "Score", DataType = TurnKitConfig.TrackedStatDataType.DOUBLE, Scope = TurnKitConfig.TrackedStatScope.PER_PLAYER } },
-            { "Something", new TrackedStatMetadata { Name = "Something", DataType = TurnKitConfig.TrackedStatDataType.STRING, Scope = TurnKitConfig.TrackedStatScope.MATCH } },
-            { "ListOfStrings", new TrackedStatMetadata { Name = "ListOfStrings", DataType = TurnKitConfig.TrackedStatDataType.LIST_STRING, Scope = TurnKitConfig.TrackedStatScope.MATCH } },
+            { "score", new TrackedStatMetadata { Name = "score", DataType = TurnKitConfig.TrackedStatDataType.DOUBLE, Scope = TurnKitConfig.TrackedStatScope.PER_PLAYER } },
         };
 
         public static class Stats
         {
-            public static readonly PlayerStatToken<double, DoubleStatBuilder> Score = new(StatMetadata["Score"]);
-            public static readonly MatchStatToken<string, StringStatBuilder> Something = new(StatMetadata["Something"]);
-            public static readonly MatchStatToken<IReadOnlyList<string>, ListStringStatBuilder> ListOfStrings = new(StatMetadata["ListOfStrings"]);
+            public static readonly PlayerStatToken<double, DoubleStatBuilder> Score = new(StatMetadata["score"]);
         }
     }
 
