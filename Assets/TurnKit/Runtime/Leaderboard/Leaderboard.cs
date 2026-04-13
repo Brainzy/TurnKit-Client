@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace TurnKit
 {
@@ -17,10 +15,8 @@ namespace TurnKit
     [Serializable]
     public class LeaderboardEntry
     {
-        public string playerId = "";
-        public double scoreValue;
-        public long rank;
-        public string metadata = "";
+        public string n = "";
+        public double s;
     }
 
     [Serializable]
@@ -39,8 +35,8 @@ namespace TurnKit
     [Serializable]
     public class CombinedScores
     {
-        public TopScores top = new();
-        public PlayerScore player = new();
+        public TopScores topScores = new();
+        public PlayerScore playerScore = new();
     }
 
     [Serializable]
@@ -207,8 +203,7 @@ namespace TurnKit
             int surrounding,
             string leaderboard)
         {
-            var url = $"{Base}{Slug(leaderboard)}/players/{UnityWebRequest.EscapeURL(playerId)}" +
-                      $"?surrounding={surrounding}";
+            var url = $"{Base}{Slug(leaderboard)}/me?surrounding={surrounding}";
             return Get<PlayerScore>(identity, url);
         }
 
