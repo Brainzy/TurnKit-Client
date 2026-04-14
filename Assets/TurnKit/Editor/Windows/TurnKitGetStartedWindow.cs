@@ -268,7 +268,7 @@ namespace TurnKit.Editor
                 
                 GUILayout.Space(4f);
                 EditorGUILayout.LabelField(
-                    "When you're ready for advanced settings, additional Client Keys, new projects, or usage monitoring, open the Dashboard. <color=#2F6FED>turnkit.dev/account</color>.",
+                    "When you're ready for advanced settings, additional Client Keys, new projects, or usage monitoring, open the Dashboard. <color=#2F6FED>turnkit.dev/games</color>.",
                     bodyStyle);
                 GUILayout.Space(10f);
 

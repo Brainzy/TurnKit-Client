@@ -90,7 +90,8 @@ namespace TurnKit.Editor
 
             if (string.IsNullOrEmpty(config.clientKey))
             {
-                EditorGUILayout.HelpBox("No client key configured. Connect to TurnKit to generate one.", MessageType.Warning);
+                EditorGUILayout.HelpBox("No client key configured. Connect to TurnKit to generate one. " +
+                                        "Note that quick setup can generate just first time the key, create manually on turnkit.dev/games if its not your first time running quick setup", MessageType.Warning);
                 if (GUILayout.Button("Connect to TurnKit", GUILayout.Height(30)))
                 {
                     TurnKitAuthHandler.StartAuthFlow(config.projectName);
