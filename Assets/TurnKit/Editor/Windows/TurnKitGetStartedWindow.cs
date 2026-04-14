@@ -177,6 +177,11 @@ namespace TurnKit.Editor
 
         private void DrawSampleCard()
         {
+            var sampleTitleStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                wordWrap = true
+            };
+
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
                 EditorGUILayout.LabelField("B. Try a sample scene", EditorStyles.boldLabel);
@@ -191,8 +196,8 @@ namespace TurnKit.Editor
                         using (new EditorGUILayout.HorizontalScope())
                         {
                             string title = sample.IsRecommended ? $"{sample.Name}   Recommended" : sample.Name;
-                            EditorGUILayout.LabelField(title, EditorStyles.boldLabel);
-                            GUILayout.FlexibleSpace();
+                            GUILayout.Label(title, sampleTitleStyle, GUILayout.ExpandWidth(true));
+                            GUILayout.Space(12f);
 
                             bool canOpen = AssetDatabase.LoadAssetAtPath<SceneAsset>(sample.ScenePath) != null;
                             using (new EditorGUI.DisabledScope(!canOpen))
