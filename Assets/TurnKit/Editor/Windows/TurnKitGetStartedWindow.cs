@@ -22,7 +22,7 @@ namespace TurnKit.Editor
         private bool showCloneSection;
         private bool isConfigured;
 
-        [MenuItem("TurnKit/GetStarted", priority = 0)]
+        [MenuItem("Tools/TurnKit/GetStarted", priority = 0)]
         public static void ShowWindow()
         {
             var window = GetWindow<TurnKitGetStartedWindow>("TurnKit Get Started");

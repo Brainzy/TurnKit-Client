@@ -93,7 +93,7 @@ namespace TurnKit.Internal.ParrelSync
     }
     public class Preferences : EditorWindow
     {
-        [MenuItem("TurnKit/ParrelSync/Preferences", priority = 100)]
+        [MenuItem("Tools/TurnKit/ParrelSync/Preferences", priority = 100)]
         private static void InitWindow()
         {
             Preferences window = (Preferences)EditorWindow.GetWindow(typeof(Preferences));

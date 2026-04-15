@@ -13,7 +13,7 @@ namespace TurnKit.Editor
         private readonly Dictionary<string, bool> webhookFoldouts = new();
         private List<TurnKitConfig.WebhookConfig> webhooks = new();
 
-        [MenuItem("TurnKit/Configuration", priority = 1)]
+        [MenuItem("Tools/TurnKit/Configuration", priority = 1)]
         public static void ShowWindow()
         {
             var window = GetWindow<TurnKitEditorWindow>("TurnKit Configuration");

@@ -7,7 +7,7 @@ namespace TurnKit.Internal.ParrelSync
     /// <summary>
     ///Clones manager Unity editor window
     /// </summary>
-	public class ClonesManagerWindow : EditorWindow
+    public class ClonesManagerWindow : EditorWindow
     {
         /// <summary>
         /// Returns true if project clone exists.
@@ -17,10 +17,10 @@ namespace TurnKit.Internal.ParrelSync
             get { return ClonesManager.GetCloneProjectsPath().Count >= 1; }
         }
 
-        [MenuItem("TurnKit/ParrelSync/Clones Manager", priority = 99)]
+        [MenuItem("Tools/TurnKit/ParrelSync/Clones Manager", priority = 99)]
         private static void InitWindow()
         {
-            ClonesManagerWindow window = (ClonesManagerWindow)EditorWindow.GetWindow(typeof(ClonesManagerWindow));
+            ClonesManagerWindow window = (ClonesManagerWindow) EditorWindow.GetWindow(typeof(ClonesManagerWindow));
             window.titleContent = new GUIContent("Clones Manager");
             window.Show();
         }
@@ -48,7 +48,8 @@ namespace TurnKit.Internal.ParrelSync
                 {
                     /// If original project is present, display some usage info.
                     EditorGUILayout.HelpBox(
-                        "This project is a clone of the project '" + Path.GetFileName(originalProjectPath) + "'.\nIf you want to make changes the project files or manage clones, please open the original project through Unity Hub.",
+                        "This project is a clone of the project '" + Path.GetFileName(originalProjectPath) +
+                        "'.\nIf you want to make changes the project files or manage clones, please open the original project through Unity Hub.",
                         MessageType.Info);
                 }
 
@@ -59,6 +60,7 @@ namespace TurnKit.Internal.ParrelSync
                 {
                     Application.OpenURL(ExternalLinks.CustomArgumentHelpLink);
                 }
+
                 GUILayout.EndHorizontal();
 
                 string argumentFilePath = Path.Combine(ClonesManager.GetCurrentProjectPath(), ClonesManager.ArgumentFileName);
@@ -81,7 +83,7 @@ namespace TurnKit.Internal.ParrelSync
                     EditorGUILayout.LabelField("No argument file found.");
                 }
             }
-            else// If it is an original project...
+            else // If it is an original project...
             {
                 if (isCloneCreated)
                 {
@@ -90,11 +92,10 @@ namespace TurnKit.Internal.ParrelSync
 
                     //List all clones
                     clonesScrollPos =
-                         EditorGUILayout.BeginScrollView(clonesScrollPos);
+                        EditorGUILayout.BeginScrollView(clonesScrollPos);
                     var cloneProjectsPath = ClonesManager.GetCloneProjectsPath();
                     for (int i = 0; i < cloneProjectsPath.Count; i++)
                     {
-
                         GUILayout.BeginVertical("GroupBox");
                         string cloneProjectPath = cloneProjectsPath[i];
 
@@ -112,6 +113,7 @@ namespace TurnKit.Internal.ParrelSync
                         {
                             ClonesManager.OpenProjectInFileExplorer(cloneProjectPath);
                         }
+
                         GUILayout.EndHorizontal();
 
                         GUILayout.BeginHorizontal();
@@ -120,6 +122,7 @@ namespace TurnKit.Internal.ParrelSync
                         {
                             Application.OpenURL(ExternalLinks.CustomArgumentHelpLink);
                         }
+
                         GUILayout.EndHorizontal();
 
                         string argumentFilePath = Path.Combine(cloneProjectPath, ClonesManager.ArgumentFileName);
@@ -159,7 +162,8 @@ namespace TurnKit.Internal.ParrelSync
                         {
                             bool delete = EditorUtility.DisplayDialog(
                                 "Delete the clone?",
-                                "Are you sure you want to delete the clone project '" + ClonesManager.GetCurrentProject().name + "_clone'?",
+                                "Are you sure you want to delete the clone project '" + ClonesManager.GetCurrentProject().name +
+                                "_clone'?",
                                 "Delete",
                                 "Cancel");
                             if (delete)
@@ -171,8 +175,8 @@ namespace TurnKit.Internal.ParrelSync
                         GUILayout.EndHorizontal();
                         EditorGUI.EndDisabledGroup();
                         GUILayout.EndVertical();
-
                     }
+
                     EditorGUILayout.EndScrollView();
 
                     if (GUILayout.Button("Add new clone"))

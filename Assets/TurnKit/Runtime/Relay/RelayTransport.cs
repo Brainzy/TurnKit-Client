@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
-using NativeWebSocket;
 using TurnKit.Internal.SimpleJSON;
+using TurnKit.NativeWebSocket;
 using UnityEngine;
 
 namespace TurnKit
