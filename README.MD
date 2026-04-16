@@ -1,4 +1,4 @@
-TurnKit Server is currently in private beta. Public infrastructure and dashboard access are launching in April 2026
+**TurnKit is now live!** For setup guides and API references, visit the [Official Documentation](https://turnkit.dev/docs).
 
 ## License
 
