@@ -46,6 +46,29 @@ namespace TurnKit
             await ConnectInternal(_lastWebSocketUrl, relayToken, lastMoveNumber, sendReconnectMessage: false);
         }
 
+        public async Task<bool> Resume(string relayToken, int lastMoveNumber)
+        {
+            if (string.IsNullOrWhiteSpace(relayToken))
+            {
+                return false;
+            }
+
+            _lastRelayToken = relayToken;
+            _lastAckMoveNumber = lastMoveNumber;
+            _lastWebSocketUrl = BuildWebSocketUrl(relayToken);
+
+            try
+            {
+                await ConnectInternal(_lastWebSocketUrl, relayToken, lastMoveNumber, sendReconnectMessage: true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _onError?.Invoke($"Resume failed: {ex.Message}");
+                return false;
+            }
+        }
+
         public async Task<bool> Reconnect(int lastMoveNumber, bool force = false)
         {
             if (!HasReconnectContext)

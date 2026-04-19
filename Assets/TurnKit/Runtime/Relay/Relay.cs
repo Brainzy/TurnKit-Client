@@ -59,6 +59,7 @@ namespace TurnKit
         public static event Action OnConnected;
         public static event Action OnDisconnected;
         public static event Action OnSyncComplete;
+        public static event Action<ErrorMessage> OnReconnectFailed;
         public static event Action<RelayList, ListChangeType> OnListChanged;
 
         private void Awake()
@@ -134,6 +135,33 @@ namespace TurnKit
             }
 
             return await Instance.ReconnectInternal(manual: true);
+        }
+
+        public static async Task<bool> Resume(string playerId, string slug, string relayToken, int lastMoveNumber)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(slug) || string.IsNullOrWhiteSpace(relayToken))
+            {
+                return false;
+            }
+
+            if (Registry.Initializers.TryGetValue(slug, out var initAction))
+            {
+                initAction.Invoke();
+            }
+            else
+            {
+                Debug.LogError($"[TurnKit] No config found for slug: {slug}");
+                return false;
+            }
+
+            Instance._relayToken = relayToken;
+            Instance._myPlayerId = playerId;
+            Instance._state.SetLocalPlayer(playerId);
+            Instance._sessionTerminated = false;
+            Instance._allowReconnect = true;
+            Instance.ResetReconnectBackoff();
+
+            return await Instance.ResumeInternal(relayToken, lastMoveNumber);
         }
 
         public static void SendJson(string json)
@@ -407,6 +435,13 @@ namespace TurnKit
             switch (outcome.EventType)
             {
                 case RelayEventType.MatchStarted:
+                    _sessionId = outcome.MatchStarted.sessionId;
+                    var localPlayer = outcome.MatchStarted.players?.FirstOrDefault(player => player.playerId == _myPlayerId);
+                    if (localPlayer != null)
+                    {
+                        _mySlot = localPlayer.slot;
+                    }
+
                     OnMatchStarted?.Invoke(outcome.MatchStarted, _state.AllLists);
                     if (TurnKitConfig.Instance.enableLogging)
                     {
@@ -448,7 +483,12 @@ namespace TurnKit
                     break;
                 case RelayEventType.Error:
                     OnError?.Invoke(outcome.Error);
-                    if (ShouldReconnectOnError(outcome.Error))
+                    if (IsReconnectExpiredError(outcome.Error))
+                    {
+                        DisableReconnect();
+                        OnReconnectFailed?.Invoke(outcome.Error);
+                    }
+                    else if (ShouldReconnectOnError(outcome.Error))
                     {
                         _ = ReconnectFromStaleSocketError();
                     }
@@ -653,6 +693,25 @@ namespace TurnKit
             }
         }
 
+        private async Task<bool> ResumeInternal(string relayToken, int lastMoveNumber)
+        {
+            if (_sessionTerminated || _transport == null)
+            {
+                return false;
+            }
+
+            _reconnectScheduled = false;
+            _reconnectInProgress = true;
+            try
+            {
+                return await _transport.Resume(relayToken, lastMoveNumber);
+            }
+            finally
+            {
+                _reconnectInProgress = false;
+            }
+        }
+
         private void ScheduleAutoReconnect()
         {
             if (!AutoReconnectEnabled || !_allowReconnect || _sessionTerminated || _transport == null || _transport.IsConnected)
@@ -693,6 +752,11 @@ namespace TurnKit
         private static bool ShouldReconnectOnError(ErrorMessage error)
         {
             return error != null && string.Equals(error.code, "STALE_SOCKET", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsReconnectExpiredError(ErrorMessage error)
+        {
+            return error != null && string.Equals(error.code, "RECONNECT_EXPIRED", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task ReconnectFromStaleSocketError()
