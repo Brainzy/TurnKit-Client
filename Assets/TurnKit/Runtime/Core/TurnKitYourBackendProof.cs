@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace TurnKit
 {
     [Serializable]
-    public sealed class TurnKitSignedPlayer
+    public sealed class TurnKitYourBackendProof
     {
         private static readonly Regex NoncePattern = new("^[A-Za-z0-9_-]{16,128}$", RegexOptions.Compiled);
 
@@ -18,7 +18,7 @@ namespace TurnKit
             NoncePattern.IsMatch(Nonce ?? "") &&
             !string.IsNullOrWhiteSpace(Signature);
 
-        public TurnKitSignedPlayer(string playerId, string timestamp, string nonce, string signature)
+        public TurnKitYourBackendProof(string playerId, string timestamp, string nonce, string signature)
         {
             PlayerId = playerId ?? "";
             Timestamp = timestamp ?? "";

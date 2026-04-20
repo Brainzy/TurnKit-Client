@@ -71,7 +71,7 @@ namespace TurnKit
 
         public static Task<bool> MatchWithAnyone(string playerId, string slug, Dictionary<string, List<RelayItem>> items = null)
         {
-            return MatchWithAnyone(TurnKitClientIdentity.Open(playerId), slug, items);
+            return MatchWithAnyone(TurnKitClientIdentity.NoAuth(playerId), slug, items);
         }
 
         public static Task<bool> MatchWithAnyone(TurnKitPlayerSession session, string slug, Dictionary<string, List<RelayItem>> items = null)
@@ -79,9 +79,9 @@ namespace TurnKit
             return MatchWithAnyone(TurnKitClientIdentity.Authenticated(session), slug, items);
         }
 
-        public static Task<bool> MatchWithAnyone(TurnKitSignedPlayer player, string slug, Dictionary<string, List<RelayItem>> items = null)
+        public static Task<bool> MatchWithAnyone(TurnKitYourBackendProof proof, string slug, Dictionary<string, List<RelayItem>> items = null)
         {
-            return MatchWithAnyone(TurnKitClientIdentity.Signed(player), slug, items);
+            return MatchWithAnyone(TurnKitClientIdentity.YourBackend(proof), slug, items);
         }
 
         private static async Task<bool> MatchWithAnyone(TurnKitClientIdentity identity, string slug, Dictionary<string, List<RelayItem>> items = null)
@@ -238,7 +238,7 @@ namespace TurnKit
 
         public static Task LeaveQueue(string playerId, string slug)
         {
-            return LeaveQueue(TurnKitClientIdentity.Open(playerId), slug);
+            return LeaveQueue(TurnKitClientIdentity.NoAuth(playerId), slug);
         }
 
         public static Task LeaveQueue(TurnKitPlayerSession session, string slug)
@@ -246,9 +246,9 @@ namespace TurnKit
             return LeaveQueue(TurnKitClientIdentity.Authenticated(session), slug);
         }
 
-        public static Task LeaveQueue(TurnKitSignedPlayer player, string slug)
+        public static Task LeaveQueue(TurnKitYourBackendProof proof, string slug)
         {
-            return LeaveQueue(TurnKitClientIdentity.Signed(player), slug);
+            return LeaveQueue(TurnKitClientIdentity.YourBackend(proof), slug);
         }
 
         private static async Task LeaveQueue(TurnKitClientIdentity identity, string slug)

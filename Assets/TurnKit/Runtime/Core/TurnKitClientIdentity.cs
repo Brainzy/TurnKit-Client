@@ -6,17 +6,17 @@ namespace TurnKit
     {
         public string PlayerId { get; }
         public string PlayerToken { get; }
-        public TurnKitSignedPlayer SignedPlayer { get; }
-        public bool IsOpen => string.IsNullOrWhiteSpace(PlayerToken) && SignedPlayer == null;
+        public TurnKitYourBackendProof YourBackendProof { get; }
+        public bool IsNoAuth => string.IsNullOrWhiteSpace(PlayerToken) && YourBackendProof == null;
 
-        private TurnKitClientIdentity(string playerId, string playerToken, TurnKitSignedPlayer signedPlayer)
+        private TurnKitClientIdentity(string playerId, string playerToken, TurnKitYourBackendProof yourBackendProof)
         {
             PlayerId = playerId ?? "";
             PlayerToken = playerToken ?? "";
-            SignedPlayer = signedPlayer;
+            YourBackendProof = yourBackendProof;
         }
 
-        public static TurnKitClientIdentity Open(string playerId)
+        public static TurnKitClientIdentity NoAuth(string playerId)
         {
             if (string.IsNullOrWhiteSpace(playerId))
             {
@@ -41,19 +41,20 @@ namespace TurnKit
             return new TurnKitClientIdentity(session.PlayerId, session.PlayerToken, null);
         }
 
-        public static TurnKitClientIdentity Signed(TurnKitSignedPlayer player)
+        public static TurnKitClientIdentity YourBackend(TurnKitYourBackendProof proof)
         {
-            if (player == null)
+            if (proof == null)
             {
-                throw new ArgumentNullException(nameof(player));
+                throw new ArgumentNullException(nameof(proof));
             }
 
-            if (!player.IsValid)
+            if (!proof.IsValid)
             {
-                throw new ArgumentException("Signed player must contain PlayerId, Timestamp, Nonce and Signature.", nameof(player));
+                throw new ArgumentException("YOUR_BACKEND proof must contain PlayerId, Timestamp, Nonce and Signature.", nameof(proof));
             }
 
-            return new TurnKitClientIdentity(player.PlayerId, "", player);
+            return new TurnKitClientIdentity(proof.PlayerId, "", proof);
         }
+
     }
 }

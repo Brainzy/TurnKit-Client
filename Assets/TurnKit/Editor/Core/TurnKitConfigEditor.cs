@@ -31,6 +31,8 @@ namespace TurnKit.Editor
             EditorGUILayout.TextField("Project", config.projectName);
             EditorGUILayout.TextField("Game Key", string.IsNullOrEmpty(config.gameKeyId) ? "Not connected" : config.gameKeyId);
             config.clientKey = EditorGUILayout.TextField("Client Key", config.clientKey);
+            EditorGUILayout.TextField("Player Auth Policy", config.playerAuthPolicy.ToString());
+            EditorGUILayout.TextField("Player Auth Methods", config.playerAuthMethods == null || config.playerAuthMethods.Count == 0 ? "(none)" : string.Join(", ", config.playerAuthMethods));
             EditorGUILayout.TextField("Default Leaderboard", config.defaultLeaderboard);
             
             EditorGUILayout.Space(5);

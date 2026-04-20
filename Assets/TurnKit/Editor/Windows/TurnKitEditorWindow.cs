@@ -111,6 +111,15 @@ namespace TurnKit.Editor
                     AssetDatabase.SaveAssets();
                 }
 
+                EditorGUI.BeginDisabledGroup(true);
+                EditorGUILayout.TextField("Player Auth Policy", config.playerAuthPolicy.ToString());
+                EditorGUILayout.TextField(
+                    "Player Auth Methods",
+                    config.playerAuthMethods == null || config.playerAuthMethods.Count == 0
+                        ? "(none)"
+                        : string.Join(", ", config.playerAuthMethods));
+                EditorGUI.EndDisabledGroup();
+
                 EditorGUILayout.HelpBox("Connected to TurnKit", MessageType.Info);
                 if (GUILayout.Button("Reconnect", GUILayout.Height(25)))
                 {

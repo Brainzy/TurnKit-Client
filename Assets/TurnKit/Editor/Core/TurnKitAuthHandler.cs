@@ -192,7 +192,9 @@ namespace TurnKit.Editor
             {
                 config.clientKey = response.selectedClientKey;
             }
-            
+
+            config.playerAuthPolicy = response.playerAuthPolicy;
+            config.playerAuthMethods = response.playerAuthMethods ?? new System.Collections.Generic.List<TurnKitConfig.PlayerAuthMethod>();
             config.leaderboards = response.leaderboards ?? new System.Collections.Generic.List<TurnKitConfig.LeaderboardConfig>();
             config.relayConfigs = response.relayConfigs ?? new System.Collections.Generic.List<TurnKitConfig.RelayConfig>();
             config.defaultLeaderboard = ResolveDefaultLeaderboard(config.defaultLeaderboard, config.leaderboards);

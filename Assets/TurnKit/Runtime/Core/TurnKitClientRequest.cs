@@ -44,7 +44,7 @@ namespace TurnKit
 
         public static async Task PrepareIdentity(UnityWebRequest request, TurnKitClientIdentity identity)
         {
-            if (identity.IsOpen)
+            if (identity.IsNoAuth)
             {
                 request.SetRequestHeader("X-Player-Id", identity.PlayerId);
                 return;
@@ -56,7 +56,7 @@ namespace TurnKit
                 return;
             }
 
-            var token = await ExchangeSignedPlayer(identity.SignedPlayer);
+            var token = await ExchangeYourBackendProof(identity.YourBackendProof);
             request.SetRequestHeader("Authorization", $"Bearer {token}");
         }
 
@@ -93,36 +93,36 @@ namespace TurnKit
             return $"{TurnKitConfig.Instance.serverUrl.TrimEnd('/')}/{path.TrimStart('/')}";
         }
 
-        private static async Task<string> ExchangeSignedPlayer(TurnKitSignedPlayer player)
+        private static async Task<string> ExchangeYourBackendProof(TurnKitYourBackendProof proof)
         {
             using var request = CreateJson(
-                "/v1/client/auth/signed/exchange",
+                "/v1/client/auth/your-backend/exchange",
                 "POST",
-                JsonUtility.ToJson(new SignedExchangeRequest(player)));
+                JsonUtility.ToJson(new YourBackendExchangeRequest(proof)));
             var response = await SendJson<SignedExchangeResponse>(request);
 
             if (string.IsNullOrWhiteSpace(response.token))
             {
-                throw new Exception("TurnKit signed exchange did not return a player token.");
+                throw new Exception("TurnKit YOUR_BACKEND exchange did not return a player token.");
             }
 
             return response.token;
         }
 
         [Serializable]
-        private sealed class SignedExchangeRequest
+        private sealed class YourBackendExchangeRequest
         {
             public string playerId;
             public string timestamp;
             public string nonce;
             public string signature;
 
-            public SignedExchangeRequest(TurnKitSignedPlayer player)
+            public YourBackendExchangeRequest(TurnKitYourBackendProof proof)
             {
-                playerId = player.PlayerId;
-                timestamp = player.Timestamp;
-                nonce = player.Nonce;
-                signature = player.Signature;
+                playerId = proof.PlayerId;
+                timestamp = proof.Timestamp;
+                nonce = proof.Nonce;
+                signature = proof.Signature;
             }
         }
 

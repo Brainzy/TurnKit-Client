@@ -16,6 +16,8 @@ namespace TurnKit
 
         [Header("Authentication")]
         public string clientKey;
+        public PlayerAuthPolicy playerAuthPolicy = PlayerAuthPolicy.NO_AUTH;
+        public List<PlayerAuthMethod> playerAuthMethods = new();
 
         [Header("Leaderboard")]
         [Tooltip("Default leaderboard slug. A 'global' leaderboard is created automatically for your game key, add more if you need via swagger api.")]
@@ -175,6 +177,18 @@ namespace TurnKit
         {
             LEADERBOARD,
             WEBHOOK
+        }
+
+        public enum PlayerAuthPolicy
+        {
+            NO_AUTH,
+            AUTH_REQUIRED
+        }
+
+        public enum PlayerAuthMethod
+        {
+            YOUR_BACKEND,
+            EMAIL_OTP
         }
     }
 }

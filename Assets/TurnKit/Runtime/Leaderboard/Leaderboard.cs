@@ -62,7 +62,7 @@ namespace TurnKit
             string metadata = null,
             string leaderboard = null)
         {
-            return SubmitScore(TurnKitClientIdentity.Open(playerId), score, metadata, leaderboard);
+            return SubmitScore(TurnKitClientIdentity.NoAuth(playerId), score, metadata, leaderboard);
         }
 
         public static Task<ScoreSubmitResponse> SubmitScore(
@@ -75,12 +75,12 @@ namespace TurnKit
         }
 
         public static Task<ScoreSubmitResponse> SubmitScore(
-            TurnKitSignedPlayer player,
+            TurnKitYourBackendProof proof,
             double score,
             string metadata = null,
             string leaderboard = null)
         {
-            return SubmitScore(TurnKitClientIdentity.Signed(player), score, metadata, leaderboard);
+            return SubmitScore(TurnKitClientIdentity.YourBackend(proof), score, metadata, leaderboard);
         }
 
         private static Task<ScoreSubmitResponse> SubmitScore(
@@ -102,7 +102,7 @@ namespace TurnKit
             int limit = 10,
             string leaderboard = null)
         {
-            return GetTopScores(TurnKitClientIdentity.Open(playerId), limit, leaderboard);
+            return GetTopScores(TurnKitClientIdentity.NoAuth(playerId), limit, leaderboard);
         }
 
         public static Task<TopScores> GetTopScores(
@@ -114,11 +114,11 @@ namespace TurnKit
         }
 
         public static Task<TopScores> GetTopScores(
-            TurnKitSignedPlayer player,
+            TurnKitYourBackendProof proof,
             int limit = 10,
             string leaderboard = null)
         {
-            return GetTopScores(TurnKitClientIdentity.Signed(player), limit, leaderboard);
+            return GetTopScores(TurnKitClientIdentity.YourBackend(proof), limit, leaderboard);
         }
 
         private static Task<TopScores> GetTopScores(
@@ -139,7 +139,7 @@ namespace TurnKit
             int surrounding = 5,
             string leaderboard = null)
         {
-            return GetMyRank(TurnKitClientIdentity.Open(playerId), surrounding, leaderboard);
+            return GetMyRank(TurnKitClientIdentity.NoAuth(playerId), surrounding, leaderboard);
         }
 
         public static Task<PlayerScore> GetMyRank(
@@ -151,11 +151,11 @@ namespace TurnKit
         }
 
         public static Task<PlayerScore> GetMyRank(
-            TurnKitSignedPlayer player,
+            TurnKitYourBackendProof proof,
             int surrounding = 5,
             string leaderboard = null)
         {
-            return GetMyRank(TurnKitClientIdentity.Signed(player), surrounding, leaderboard);
+            return GetMyRank(TurnKitClientIdentity.YourBackend(proof), surrounding, leaderboard);
         }
 
         private static Task<PlayerScore> GetMyRank(
@@ -176,7 +176,7 @@ namespace TurnKit
             int surrounding = 5,
             string leaderboard = null)
         {
-            return GetPlayerRank(TurnKitClientIdentity.Open(playerId), playerId, surrounding, leaderboard);
+            return GetPlayerRank(TurnKitClientIdentity.NoAuth(playerId), playerId, surrounding, leaderboard);
         }
 
         public static Task<PlayerScore> GetPlayerRank(
@@ -189,12 +189,12 @@ namespace TurnKit
         }
 
         public static Task<PlayerScore> GetPlayerRank(
-            TurnKitSignedPlayer player,
+            TurnKitYourBackendProof proof,
             string playerId,
             int surrounding = 5,
             string leaderboard = null)
         {
-            return GetPlayerRank(TurnKitClientIdentity.Signed(player), playerId, surrounding, leaderboard);
+            return GetPlayerRank(TurnKitClientIdentity.YourBackend(proof), playerId, surrounding, leaderboard);
         }
 
         private static Task<PlayerScore> GetPlayerRank(
@@ -216,7 +216,7 @@ namespace TurnKit
             int surrounding = 5,
             string leaderboard = null)
         {
-            return GetCombined(TurnKitClientIdentity.Open(playerId), topLimit, surrounding, leaderboard);
+            return GetCombined(TurnKitClientIdentity.NoAuth(playerId), topLimit, surrounding, leaderboard);
         }
 
         public static Task<CombinedScores> GetCombined(
@@ -229,12 +229,12 @@ namespace TurnKit
         }
 
         public static Task<CombinedScores> GetCombined(
-            TurnKitSignedPlayer player,
+            TurnKitYourBackendProof proof,
             int topLimit = 10,
             int surrounding = 5,
             string leaderboard = null)
         {
-            return GetCombined(TurnKitClientIdentity.Signed(player), topLimit, surrounding, leaderboard);
+            return GetCombined(TurnKitClientIdentity.YourBackend(proof), topLimit, surrounding, leaderboard);
         }
 
         private static Task<CombinedScores> GetCombined(

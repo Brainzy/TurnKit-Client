@@ -29,6 +29,8 @@ namespace TurnKit.Editor
             public string selectedClientKey;
             public List<TurnKitConfig.LeaderboardConfig> leaderboards;
             public List<TurnKitConfig.RelayConfig> relayConfigs;
+            public TurnKitConfig.PlayerAuthPolicy playerAuthPolicy;
+            public List<TurnKitConfig.PlayerAuthMethod> playerAuthMethods;
         }
 
         [Serializable]
@@ -72,6 +74,13 @@ namespace TurnKit.Editor
         internal static AuthResponse ParseAuthResponse(string json)
         {
             var node = JSON.Parse(json).AsObject;
+            JSONNode root = node;
+            JSONNode dashboard = node["dashboard"];
+            JSONNode source = dashboard != null && !dashboard.IsNull ? dashboard : root;
+            JSONNode gameNode = source["game"];
+            JSONNode gameKeyNode = gameNode != null && !gameNode.IsNull ? gameNode : source["gameKey"];
+            JSONNode authNode = source["auth"];
+
             return new AuthResponse
             {
                 jwt = node["jwt"],
@@ -79,11 +88,13 @@ namespace TurnKit.Editor
                 selectedClientKey = node["selectedClientKey"],
                 gameKey = new GameKeyInfo
                 {
-                    id = node["gameKey"]["id"],
-                    name = node["gameKey"]["name"]
+                    id = gameKeyNode["id"],
+                    name = gameKeyNode["name"]
                 },
-                leaderboards = ParseLeaderboardConfigList(node["leaderboards"]),
-                relayConfigs = ParseRelayConfigList(node["relayConfigs"].ToString())
+                leaderboards = ParseLeaderboardConfigList(source["leaderboards"]),
+                relayConfigs = ParseRelayConfigList(source["relayConfigs"].ToString()),
+                playerAuthPolicy = ParseNullableEnum(gameNode["playerAuthPolicy"], ParseNullableEnum(authNode["policy"], TurnKitConfig.PlayerAuthPolicy.NO_AUTH)),
+                playerAuthMethods = ParseAuthMethodList(authNode["methods"])
             };
         }
 
@@ -486,6 +497,23 @@ namespace TurnKit.Editor
             }
 
             return webhooks;
+        }
+
+        private static List<TurnKitConfig.PlayerAuthMethod> ParseAuthMethodList(JSONNode node)
+        {
+            var methods = new List<TurnKitConfig.PlayerAuthMethod>();
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return methods;
+            }
+
+            foreach (JSONNode item in array)
+            {
+                methods.Add(ParseEnum(item.Value, TurnKitConfig.PlayerAuthMethod.YOUR_BACKEND));
+            }
+
+            return methods;
         }
 
         private static TurnKitConfig.WebhookConfig ParseWebhook(JSONNode node)
