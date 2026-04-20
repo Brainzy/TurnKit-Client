@@ -6,6 +6,25 @@ namespace TurnKit
 {
     internal sealed class RelayValidator
     {
+        public bool ValidateVotingConfiguration(TurnKitConfig.RelayConfig relay, out string error)
+        {
+            error = null;
+
+            if (relay == null || !relay.votingEnabled)
+            {
+                return true;
+            }
+
+            if (relay.votingMode == TurnKitConfig.VotingMode.ASYNC &&
+                relay.failAction != TurnKitConfig.FailAction.END_GAME)
+            {
+                error = $"{relay.slug}: ASYNC voting requires END_GAME fail action.";
+                return false;
+            }
+
+            return true;
+        }
+
         public void ValidateReadyToSend(bool isConnected, bool isInSyncWindow)
         {
             if (!isConnected)

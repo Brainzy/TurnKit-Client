@@ -214,9 +214,9 @@ namespace TurnKit.Editor
                     errors.Add($"{relay.slug}: Votes to fail ({relay.votesToFail}) exceeds max players ({relay.maxPlayers}).");
                 }
 
-                if (relay.votingMode == TurnKitConfig.VotingMode.ASYNC && relay.failAction == TurnKitConfig.FailAction.END_GAME)
+                if (!ValidateVotingConfiguration(relay, out string votingError))
                 {
-                    errors.Add($"{relay.slug}: ASYNC voting cannot use END_GAME fail action.");
+                    errors.Add(votingError);
                 }
             }
 
@@ -306,6 +306,25 @@ namespace TurnKit.Editor
         {
             relay.lists ??= new List<TurnKitConfig.RelayListConfig>();
             relay.trackedStats ??= new List<TurnKitConfig.TrackedStatConfig>();
+        }
+
+        private static bool ValidateVotingConfiguration(TurnKitConfig.RelayConfig relay, out string error)
+        {
+            error = null;
+
+            if (relay == null || !relay.votingEnabled)
+            {
+                return true;
+            }
+
+            if (relay.votingMode == TurnKitConfig.VotingMode.ASYNC &&
+                relay.failAction != TurnKitConfig.FailAction.END_GAME)
+            {
+                error = $"{relay.slug}: ASYNC voting requires END_GAME fail action.";
+                return false;
+            }
+
+            return true;
         }
     }
 }
