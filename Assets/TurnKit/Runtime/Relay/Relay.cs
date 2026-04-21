@@ -179,6 +179,12 @@ namespace TurnKit
             Instance.ExecuteQueuedActions(true);
         }
 
+        public static void PassTurn()
+        {
+            Instance._commandQueue.QueuePassTurn(MyPlayerId);
+            Instance.ExecuteQueuedActions(false);
+        }
+
         public static TBuilder Stat<TValue, TBuilder>(MatchStatToken<TValue, TBuilder> token)
         {
             return Instance.CreateStatBuilder<TBuilder>(token.GetMetadata(), null);
@@ -229,10 +235,15 @@ namespace TurnKit
         {
             return !Instance._state.TryGetListsByTag(tag.ToString(), out var lists) ? null : lists.Where(list => list.IsOwnedByMe).ToList();
         }
-
+		
         public static List<RelayList> GetOpponentsLists<T>(T tag) where T : Enum
         {
             return !Instance._state.TryGetListsByTag(tag.ToString(), out var lists) ? null : lists.Where(list => !list.IsOwnedByMe).ToList();
+        }
+		
+		public static RelayList GetList<T>(T tag, TurnKitConfig.PlayerSlot slot) where T : Enum
+        {
+            return !Instance._state.TryGetListsByTag(tag.ToString(), out var lists) ? null : lists.First(list => list._ownerSlots.Contains(slot));
         }
 
         public static RelayList GetList<T>(T name)
@@ -323,6 +334,11 @@ namespace TurnKit
         internal void EnqueueShuffle(RelayList list)
         {
             _commandQueue.QueueShuffle(list);
+        }
+
+        internal void EnqueuePassTurn()
+        {
+            _commandQueue.QueuePassTurn(_myPlayerId);
         }
 
         internal MoveBuilder CreateMoveBuilder(RelayList fromList, SelectorType selector, string[] data)

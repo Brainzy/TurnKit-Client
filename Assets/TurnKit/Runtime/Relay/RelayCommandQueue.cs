@@ -81,6 +81,15 @@ namespace TurnKit
             }
         }
 
+        public void QueuePassTurn(string playerId)
+        {
+            _queuedActions.Add(new RelayAction
+            {
+                action = ActionType.PASS_TURN,
+                playerId = playerId
+            });
+        }
+
         public void QueueSetStat(TrackedStatMetadata metadata, TurnKitConfig.PlayerSlot? slot, string playerId, JSONNode value)
         {
             if (!_validator.ValidateTrackedStatMetadata(metadata?.Name, metadata) ||

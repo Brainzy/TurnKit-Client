@@ -10,6 +10,7 @@ namespace TurnKit
         MOVE,
         REMOVE,
         SHUFFLE,
+        PASS_TURN,
         SET_STAT,
         ADD_STAT
     }
@@ -163,6 +164,14 @@ namespace TurnKit
 
                 case ActionType.SHUFFLE:
                     node["list"] = list;
+                    break;
+
+                case ActionType.PASS_TURN:
+                    if (!string.IsNullOrEmpty(playerId))
+                    {
+                        node["playerId"] = playerId;
+                    }
+
                     break;
 
                 case ActionType.SET_STAT:
