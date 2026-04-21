@@ -10,7 +10,7 @@ namespace TurnKit.Editor
 {
     public static class EnumGenerator
     {
-        private const string OutputPath = "Assets/TurnKit/Runtime/Generated/RelayListNames.cs";
+        private const string GeneratedFileName = "RelayListNames.cs";
 
         public static void Generate(TurnKitConfig config)
         {
@@ -26,15 +26,16 @@ namespace TurnKit.Editor
             }
 
             var generated = BuildGeneratedContent(config);
-            string directory = Path.GetDirectoryName(OutputPath);
+            string outputPath = ResolveOutputPath();
+            string directory = Path.GetDirectoryName(outputPath);
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
             }
 
-            File.WriteAllText(OutputPath, generated);
+            File.WriteAllText(outputPath, generated);
             AssetDatabase.Refresh();
-            Debug.Log($"[TurnKit] Generated relay config enums at {OutputPath}");
+            Debug.Log($"[TurnKit] Generated relay config enums at {outputPath}");
         }
 
         public static bool HasChanges(TurnKitConfig config)
@@ -44,14 +45,50 @@ namespace TurnKit.Editor
                 return false;
             }
 
-            if (!File.Exists(OutputPath))
+            string outputPath = ResolveOutputPath();
+            if (!File.Exists(outputPath))
             {
                 return true;
             }
 
-            string existing = File.ReadAllText(OutputPath);
+            string existing = File.ReadAllText(outputPath);
             string generated = BuildGeneratedContent(config);
             return existing != generated;
+        }
+
+        private static string ResolveOutputPath()
+        {
+            string turnKitRoot = ResolveTurnKitRoot();
+            string[] existingGeneratedFiles = AssetDatabase.FindAssets($"{Path.GetFileNameWithoutExtension(GeneratedFileName)} t:MonoScript")
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(path =>
+                    path.EndsWith($"/{GeneratedFileName}") &&
+                    path.StartsWith(turnKitRoot + "/"))
+                .ToArray();
+
+            if (existingGeneratedFiles.Length > 0)
+            {
+                return existingGeneratedFiles[0];
+            }
+
+            return $"{turnKitRoot}/Runtime/Generated/{GeneratedFileName}";
+        }
+
+        private static string ResolveTurnKitRoot()
+        {
+            string generatorPath = AssetDatabase.FindAssets("EnumGenerator t:MonoScript")
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .FirstOrDefault(path => path.EndsWith("/Editor/Core/EnumGenerator.cs"));
+
+            if (string.IsNullOrEmpty(generatorPath))
+            {
+                return "Assets/TurnKit";
+            }
+
+            string coreDirectory = Path.GetDirectoryName(generatorPath)?.Replace('\\', '/');
+            string editorDirectory = Path.GetDirectoryName(coreDirectory)?.Replace('\\', '/');
+            string turnKitRoot = Path.GetDirectoryName(editorDirectory)?.Replace('\\', '/');
+            return string.IsNullOrEmpty(turnKitRoot) ? "Assets/TurnKit" : turnKitRoot;
         }
 
         private static string BuildGeneratedContent(TurnKitConfig config)
@@ -160,7 +197,7 @@ namespace TurnKit.Editor
                         string tokenType = stat.scope == TurnKitConfig.TrackedStatScope.PER_PLAYER
                             ? $"PlayerStatToken<{valueType}, {builderType}>"
                             : $"MatchStatToken<{valueType}, {builderType}>";
-                        sb.AppendLine($"            public static readonly {tokenType} {memberName} = new(StatMetadata[\"{stat.name}\"]);");
+                        sb.AppendLine($"            public static readonly {tokenType} {memberName} = new {tokenType}(StatMetadata[\"{stat.name}\"]);");
                     }
                     sb.AppendLine("        }");
                 }
