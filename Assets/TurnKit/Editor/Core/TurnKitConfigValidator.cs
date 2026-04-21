@@ -152,6 +152,11 @@ namespace TurnKit.Editor
 
         public static bool TryGetTrackedStatNameError(string value, out string error)
         {
+            return TryGetCodeIdentifierError(value, out error);
+        }
+
+        public static bool TryGetCodeIdentifierError(string value, out string error)
+        {
             error = null;
 
             if (string.IsNullOrWhiteSpace(value))
@@ -169,6 +174,12 @@ namespace TurnKit.Editor
             if (!Regex.IsMatch(value, "^[_a-zA-Z][_a-zA-Z0-9]*$"))
             {
                 error = "Use a C# identifier: letters, numbers, and underscores only, starting with a letter or underscore.";
+                return false;
+            }
+
+            if (ReservedSlugNames.Contains(value))
+            {
+                error = "This name is reserved in C# and cannot be used.";
                 return false;
             }
 
@@ -234,7 +245,7 @@ namespace TurnKit.Editor
                 list.ownerSlots.RemoveAll(slot => (int)slot < 1 || (int)slot > relay.maxPlayers);
                 list.visibleToSlots.RemoveAll(slot => (int)slot < 1 || (int)slot > relay.maxPlayers);
 
-                if (!TryGetSlugNameError(list.name, out string listNameError))
+                if (!TryGetCodeIdentifierError(list.name, out string listNameError))
                 {
                     errors.Add($"{relay.slug}: Invalid list name '{list.name}'. {listNameError}");
                 }
@@ -243,7 +254,7 @@ namespace TurnKit.Editor
                     errors.Add($"{relay.slug}: Duplicate list name '{list.name}'.");
                 }
 
-                if (!string.IsNullOrWhiteSpace(list.tag) && !TryGetSlugNameError(list.tag, out string tagError))
+                if (!string.IsNullOrWhiteSpace(list.tag) && !TryGetCodeIdentifierError(list.tag, out string tagError))
                 {
                     errors.Add($"{relay.slug}: Invalid list tag '{list.tag}'. {tagError}");
                 }

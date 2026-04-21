@@ -111,22 +111,7 @@ namespace TurnKit.Editor
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             var headerStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 12 };
 
-            EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("Lists", headerStyle);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Mirror", GUILayout.Width(60))) MirrorLists();
-            if (GUILayout.Button("+ Add", GUILayout.Width(60)))
-            {
-                relay.lists.Add(new TurnKitConfig.RelayListConfig
-                {
-                    name = "p1_list",
-                    tag = "tag",
-                    ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1 },
-                    visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 }
-                });
-            }
-            EditorGUILayout.EndHorizontal();
-
             GUILayout.Space(5);
             if (relay.lists.Count == 0)
             {
@@ -140,6 +125,22 @@ namespace TurnKit.Editor
                     GUILayout.Space(5);
                 }
             }
+
+            GUILayout.Space(5);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Mirror", GUILayout.Width(60))) MirrorLists();
+            if (GUILayout.Button("+ Add", GUILayout.Width(60)))
+            {
+                relay.lists.Add(new TurnKitConfig.RelayListConfig
+                {
+                    name = "SomeVariable",
+                    tag = "tag",
+                    ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1 },
+                    visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 }
+                });
+            }
+            EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.EndVertical();
         }
@@ -179,11 +180,11 @@ namespace TurnKit.Editor
                 list.tag = EditorGUILayout.TextField("Tag", list.tag);
                 EditorGUIUtility.labelWidth = originalLabelWidth;
                 EditorGUILayout.EndHorizontal();
-                EditorGUILayout.LabelField("Slug format example: some_variable", EditorStyles.miniLabel);
-                DrawSlugValidation("List name", list.name);
+                EditorGUILayout.LabelField("C# identifier examples: SomeVariable, someVariable, example", EditorStyles.miniLabel);
+                DrawIdentifierValidation("List name", list.name);
                 if (!string.IsNullOrWhiteSpace(list.tag))
                 {
-                    DrawSlugValidation("Tag", list.tag);
+                    DrawIdentifierValidation("Tag", list.tag);
                 }
                 GUILayout.Space(8);
 
@@ -231,25 +232,7 @@ namespace TurnKit.Editor
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             var headerStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 12 };
 
-            EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("Tracked Stats", headerStyle);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Refresh Webhooks", GUILayout.Width(120)))
-            {
-                LoadWebhooks();
-            }
-            if (GUILayout.Button("+ Add", GUILayout.Width(60)))
-            {
-                relay.trackedStats.Add(new TurnKitConfig.TrackedStatConfig
-                {
-                    name = "score",
-                    dataType = TurnKitConfig.TrackedStatDataType.DOUBLE,
-                    scope = TurnKitConfig.TrackedStatScope.MATCH,
-                    syncTo = new List<TurnKitConfig.TrackedStatSyncTargetConfig>()
-                });
-            }
-            EditorGUILayout.EndHorizontal();
-
             GUILayout.Space(5);
             if (relay.trackedStats.Count == 0)
             {
@@ -263,6 +246,25 @@ namespace TurnKit.Editor
                     GUILayout.Space(5);
                 }
             }
+
+            GUILayout.Space(5);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Refresh Webhooks", GUILayout.Width(120)))
+            {
+                LoadWebhooks();
+            }
+            if (GUILayout.Button("+ Add", GUILayout.Width(60)))
+            {
+                relay.trackedStats.Add(new TurnKitConfig.TrackedStatConfig
+                {
+                    name = "SomeVariable",
+                    dataType = TurnKitConfig.TrackedStatDataType.DOUBLE,
+                    scope = TurnKitConfig.TrackedStatScope.MATCH,
+                    syncTo = new List<TurnKitConfig.TrackedStatSyncTargetConfig>()
+                });
+            }
+            EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.EndVertical();
         }
@@ -496,9 +498,19 @@ namespace TurnKit.Editor
             EditorGUILayout.HelpBox($"{label}: {error}", MessageType.Warning);
         }
 
+        private static void DrawIdentifierValidation(string label, string value)
+        {
+            if (TurnKitConfigValidator.TryGetCodeIdentifierError(value, out string error))
+            {
+                return;
+            }
+
+            EditorGUILayout.HelpBox($"{label}: {error}", MessageType.Warning);
+        }
+
         private static void DrawTrackedStatValidation(string value)
         {
-            if (TurnKitConfigValidator.TryGetTrackedStatNameError(value, out string error))
+            if (TurnKitConfigValidator.TryGetCodeIdentifierError(value, out string error))
             {
                 return;
             }
