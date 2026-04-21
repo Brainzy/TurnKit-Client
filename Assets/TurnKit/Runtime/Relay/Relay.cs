@@ -179,9 +179,16 @@ namespace TurnKit
             Instance.ExecuteQueuedActions(true);
         }
 
-        public static void PassTurn()
+        public static void PassTurnTo(TurnKitConfig.PlayerSlot slot)
         {
-            Instance._commandQueue.QueuePassTurn(MyPlayerId);
+            var playerId = Instance.ResolvePlayerId(slot);
+            if (string.IsNullOrEmpty(playerId))
+            {
+                Debug.LogError($"[TurnKit] Cannot pass turn to slot {slot}: no player is assigned to that slot.");
+                return;
+            }
+
+            Instance._commandQueue.QueuePassTurn(playerId);
             Instance.ExecuteQueuedActions(false);
         }
 
@@ -336,9 +343,16 @@ namespace TurnKit
             _commandQueue.QueueShuffle(list);
         }
 
-        internal void EnqueuePassTurn()
+        internal void EnqueuePassTurnTo(TurnKitConfig.PlayerSlot slot)
         {
-            _commandQueue.QueuePassTurn(_myPlayerId);
+            var playerId = ResolvePlayerId(slot);
+            if (string.IsNullOrEmpty(playerId))
+            {
+                Debug.LogError($"[TurnKit] Cannot pass turn to slot {slot}: no player is assigned to that slot.");
+                return;
+            }
+
+            _commandQueue.QueuePassTurn(playerId);
         }
 
         internal MoveBuilder CreateMoveBuilder(RelayList fromList, SelectorType selector, string[] data)
