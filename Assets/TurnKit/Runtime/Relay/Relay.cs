@@ -205,12 +205,6 @@ namespace TurnKit
             }
 
             string playerId = ResolvePlayerId(slot);
-            if (expectsPlayer && string.IsNullOrEmpty(playerId))
-            {
-                value = default;
-                return false;
-            }
-
             return _state.TryGetTrackedStatValue(metadata.Name, playerId, out value);
         }
 

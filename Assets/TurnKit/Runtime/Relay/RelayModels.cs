@@ -77,6 +77,9 @@ namespace TurnKit
         public string Name;
         public TurnKitConfig.TrackedStatDataType DataType;
         public TurnKitConfig.TrackedStatScope Scope;
+        public double InitialDouble;
+        public string InitialString;
+        public IReadOnlyList<string> InitialList;
     }
 
     [Serializable]

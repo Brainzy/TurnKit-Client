@@ -84,6 +84,10 @@ namespace TurnKit
             foreach (var kvp in statMetadata)
             {
                 _trackedStatsByName[kvp.Key] = kvp.Value;
+                if (kvp.Value.Scope == TurnKitConfig.TrackedStatScope.MATCH)
+                {
+                    _trackedStatValues[new TrackedStatKey(kvp.Key, null)] = CreateInitialValue(kvp.Value);
+                }
             }
         }
 
@@ -94,6 +98,8 @@ namespace TurnKit
             {
                 _players.AddRange(msg.players);
             }
+
+            SeedPerPlayerStatDefaults();
 
             CurrentTurnPlayerId = msg.activePlayerId;
             IsMyTurn = msg.yourTurn;
@@ -174,6 +180,16 @@ namespace TurnKit
             {
                 value = typedValue;
                 return true;
+            }
+
+            if (_trackedStatsByName.TryGetValue(statName, out var metadata))
+            {
+                object initialValue = CreateInitialValue(metadata);
+                if (initialValue is T typedInitialValue)
+                {
+                    value = typedInitialValue;
+                    return true;
+                }
             }
 
             value = default;
@@ -334,6 +350,43 @@ namespace TurnKit
             }
 
             _listsByTag[relayList.Tag].Add(relayList);
+        }
+
+        private void SeedPerPlayerStatDefaults()
+        {
+            foreach (var kvp in _trackedStatsByName)
+            {
+                if (kvp.Value.Scope != TurnKitConfig.TrackedStatScope.PER_PLAYER)
+                {
+                    continue;
+                }
+
+                object initialValue = CreateInitialValue(kvp.Value);
+                foreach (var player in _players)
+                {
+                    if (player == null || string.IsNullOrWhiteSpace(player.playerId))
+                    {
+                        continue;
+                    }
+
+                    var key = new TrackedStatKey(kvp.Key, player.playerId);
+                    if (!_trackedStatValues.ContainsKey(key))
+                    {
+                        _trackedStatValues[key] = initialValue;
+                    }
+                }
+            }
+        }
+
+        private static object CreateInitialValue(TrackedStatMetadata metadata)
+        {
+            return metadata.DataType switch
+            {
+                TurnKitConfig.TrackedStatDataType.DOUBLE => metadata.InitialDouble,
+                TurnKitConfig.TrackedStatDataType.STRING => metadata.InitialString ?? string.Empty,
+                TurnKitConfig.TrackedStatDataType.LIST_STRING => metadata.InitialList != null ? new List<string>(metadata.InitialList) : new List<string>(),
+                _ => null
+            };
         }
 
         private void ClearMetadata()

@@ -160,7 +160,17 @@ namespace TurnKit.Editor
                 {
                     foreach (var stat in relay.trackedStats)
                     {
-                        sb.AppendLine($"            {{ \"{stat.name}\", new TrackedStatMetadata {{ Name = \"{stat.name}\", DataType = TurnKitConfig.TrackedStatDataType.{stat.dataType}, Scope = TurnKitConfig.TrackedStatScope.{stat.scope} }} }},");
+                        string listInitializers = string.Join(", ", (stat.initialList ?? new List<string>())
+                            .Select(item => ToCSharpStringLiteral(item ?? string.Empty)));
+                        string initialValue = stat.dataType switch
+                        {
+                            TurnKitConfig.TrackedStatDataType.DOUBLE => $"InitialDouble = {stat.initialDouble.ToString(System.Globalization.CultureInfo.InvariantCulture)}d",
+                            TurnKitConfig.TrackedStatDataType.STRING => $"InitialString = {ToCSharpStringLiteral(stat.initialString ?? string.Empty)}",
+                            TurnKitConfig.TrackedStatDataType.LIST_STRING => $"InitialList = new List<string> {{ {listInitializers} }}",
+                            _ => null
+                        };
+
+                        sb.AppendLine($"            {{ \"{stat.name}\", new TrackedStatMetadata {{ Name = \"{stat.name}\", DataType = TurnKitConfig.TrackedStatDataType.{stat.dataType}, Scope = TurnKitConfig.TrackedStatScope.{stat.scope}, {initialValue} }} }},");
                     }
                 }
                 sb.AppendLine("        };");
@@ -305,6 +315,19 @@ namespace TurnKit.Editor
             }
 
             return sb.ToString();
+        }
+
+        private static string ToCSharpStringLiteral(string value)
+        {
+            if (value == null)
+            {
+                return "null";
+            }
+
+            string escaped = value
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"");
+            return "\"" + escaped + "\"";
         }
     }
 }
