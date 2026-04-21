@@ -189,6 +189,42 @@ namespace TurnKit
             return new PlayerStatTargetBuilder<TValue, TBuilder>(token.GetMetadata());
         }
 
+        internal bool TryGetTrackedStatValue<TValue>(TrackedStatMetadata metadata, TurnKitConfig.PlayerSlot? slot, out TValue value)
+        {
+            if (metadata == null)
+            {
+                value = default;
+                return false;
+            }
+
+            bool expectsPlayer = metadata.Scope == TurnKitConfig.TrackedStatScope.PER_PLAYER;
+            if (expectsPlayer != slot.HasValue)
+            {
+                value = default;
+                return false;
+            }
+
+            string playerId = ResolvePlayerId(slot);
+            if (expectsPlayer && string.IsNullOrEmpty(playerId))
+            {
+                value = default;
+                return false;
+            }
+
+            return _state.TryGetTrackedStatValue(metadata.Name, playerId, out value);
+        }
+
+        private string ResolvePlayerId(TurnKitConfig.PlayerSlot? slot)
+        {
+            if (!slot.HasValue)
+            {
+                return null;
+            }
+
+            string playerId = _state.ResolvePlayerId(slot.Value);
+            return string.IsNullOrEmpty(playerId) ? null : playerId;
+        }
+
         public static RelayList List<T>(T listEnum) where T : Enum
         {
             string name = listEnum.ToString();
@@ -584,11 +620,6 @@ namespace TurnKit
             }
 
             return false;
-        }
-
-        private string ResolvePlayerId(TurnKitConfig.PlayerSlot? slot)
-        {
-            return slot.HasValue ? _state.ResolvePlayerId(slot.Value) : null;
         }
 
         private void HandleDisconnectInternal(string reason)

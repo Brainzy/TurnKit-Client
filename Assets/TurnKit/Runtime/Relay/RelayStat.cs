@@ -86,6 +86,11 @@ namespace TurnKit
         {
             Relay.Instance.QueueAddStat(_metadata, _slot, delta, null);
         }
+
+        public bool TryGet(out double value)
+        {
+            return Relay.Instance.TryGetTrackedStatValue(_metadata, _slot, out value);
+        }
     }
 
     public sealed class StringStatBuilder
@@ -102,6 +107,11 @@ namespace TurnKit
         public void Set(string value)
         {
             Relay.Instance.QueueSetStat(_metadata, _slot, new JSONString(value ?? string.Empty));
+        }
+
+        public bool TryGet(out string value)
+        {
+            return Relay.Instance.TryGetTrackedStatValue(_metadata, _slot, out value);
         }
     }
 
@@ -133,6 +143,11 @@ namespace TurnKit
         public void Add(params string[] values)
         {
             Relay.Instance.QueueAddStat(_metadata, _slot, null, values);
+        }
+
+        public bool TryGet(out IReadOnlyList<string> value)
+        {
+            return Relay.Instance.TryGetTrackedStatValue(_metadata, _slot, out value);
         }
     }
 

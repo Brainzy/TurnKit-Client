@@ -8,10 +8,43 @@ namespace TurnKit
 {
     internal sealed class RelaySessionState
     {
+        private readonly struct TrackedStatKey : IEquatable<TrackedStatKey>
+        {
+            public readonly string StatName;
+            public readonly string PlayerId;
+
+            public TrackedStatKey(string statName, string playerId)
+            {
+                StatName = statName;
+                PlayerId = playerId;
+            }
+
+            public bool Equals(TrackedStatKey other)
+            {
+                return string.Equals(StatName, other.StatName, StringComparison.Ordinal) &&
+                       string.Equals(PlayerId, other.PlayerId, StringComparison.Ordinal);
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is TrackedStatKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    return ((StatName != null ? StringComparer.Ordinal.GetHashCode(StatName) : 0) * 397) ^
+                           (PlayerId != null ? StringComparer.Ordinal.GetHashCode(PlayerId) : 0);
+                }
+            }
+        }
+
         private readonly List<RelayList> _allLists = new();
         private readonly Dictionary<string, RelayList> _listsByName = new();
         private readonly Dictionary<string, List<RelayList>> _listsByTag = new();
         private readonly Dictionary<string, TrackedStatMetadata> _trackedStatsByName = new();
+        private readonly Dictionary<TrackedStatKey, object> _trackedStatValues = new();
         private readonly List<PlayerInfo> _players = new();
 
         private string _myPlayerId;
@@ -134,6 +167,19 @@ namespace TurnKit
             return _trackedStatsByName.TryGetValue(statName, out metadata);
         }
 
+        public bool TryGetTrackedStatValue<T>(string statName, string playerId, out T value)
+        {
+            if (_trackedStatValues.TryGetValue(new TrackedStatKey(statName, playerId), out var storedValue) &&
+                storedValue is T typedValue)
+            {
+                value = typedValue;
+                return true;
+            }
+
+            value = default;
+            return false;
+        }
+
         public PlayerInfo GetPlayerBySlot(TurnKitConfig.PlayerSlot slot)
         {
             foreach (var player in _players)
@@ -150,6 +196,24 @@ namespace TurnKit
         public string ResolvePlayerId(TurnKitConfig.PlayerSlot slot)
         {
             return GetPlayerBySlot(slot)?.playerId;
+        }
+
+        public void ApplyStatChanges(IEnumerable<StatChange> changes)
+        {
+            if (changes == null)
+            {
+                return;
+            }
+
+            foreach (var change in changes)
+            {
+                if (change == null || string.IsNullOrWhiteSpace(change.StatName))
+                {
+                    continue;
+                }
+
+                _trackedStatValues[new TrackedStatKey(change.StatName, change.PlayerId)] = change.ValueObject;
+            }
         }
 
         public void ApplyVisibleChanges(VisibleChange[] changes, Action<RelayList, ListChangeType> notifyListChanged)
@@ -278,6 +342,7 @@ namespace TurnKit
             _listsByName.Clear();
             _listsByTag.Clear();
             _trackedStatsByName.Clear();
+            _trackedStatValues.Clear();
         }
     }
 }

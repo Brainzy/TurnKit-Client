@@ -84,6 +84,7 @@ namespace TurnKit
             ParseStatChanges(node["statChanges"], msg);
 
             _state.ApplyVisibleChanges(msg.changes, _notifyListChanged);
+            _state.ApplyStatChanges(msg.statChanges.allChanges);
 
             _state.ApplyMoveMade(msg);
 
