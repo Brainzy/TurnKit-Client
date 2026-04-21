@@ -65,6 +65,7 @@ namespace TurnKit.Editor
             if (oldMaxPlayers != relay.maxPlayers)
             {
                 CleanupSlotsAfterMaxPlayersChange();
+                NormalizeVotingSettings();
             }
 
             relay.turnEnforcement = (TurnKitConfig.TurnEnforcement)EditorGUILayout.EnumPopup("Turn Enforcement", relay.turnEnforcement);
@@ -87,7 +88,8 @@ namespace TurnKit.Editor
                 GUILayout.Space(3);
                 EditorGUI.indentLevel++;
                 relay.votingMode = (TurnKitConfig.VotingMode)EditorGUILayout.EnumPopup("Mode", relay.votingMode);
-                int maxVotes = Mathf.Min(3, relay.maxPlayers);
+                int maxVotes = GetMaxVotes();
+                NormalizeVotingSettings();
                 relay.votesRequired = EditorGUILayout.IntSlider("Votes Required", relay.votesRequired, 1, maxVotes);
                 relay.votesToFail = EditorGUILayout.IntSlider("Votes to Fail", relay.votesToFail, 1, maxVotes);
                 relay.failAction = (TurnKitConfig.FailAction)EditorGUILayout.EnumPopup("Fail Action", relay.failAction);
@@ -104,6 +106,23 @@ namespace TurnKit.Editor
                 list.ownerSlots.RemoveAll(slot => (int)slot > relay.maxPlayers);
                 list.visibleToSlots.RemoveAll(slot => (int)slot > relay.maxPlayers);
             }
+        }
+
+        private int GetMaxVotes()
+        {
+            return Mathf.Min(3, relay.maxPlayers);
+        }
+
+        private void NormalizeVotingSettings()
+        {
+            if (relay == null || !relay.votingEnabled)
+            {
+                return;
+            }
+
+            int maxVotes = GetMaxVotes();
+            relay.votesRequired = Mathf.Clamp(relay.votesRequired, 1, maxVotes);
+            relay.votesToFail = Mathf.Clamp(relay.votesToFail, 1, maxVotes);
         }
 
         private void DrawLists()

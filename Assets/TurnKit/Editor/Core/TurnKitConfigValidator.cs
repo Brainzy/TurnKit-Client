@@ -215,6 +215,16 @@ namespace TurnKit.Editor
         {
             if (relay.votingEnabled)
             {
+                if (relay.votesRequired < 1)
+                {
+                    errors.Add($"{relay.slug}: Votes required must be at least 1.");
+                }
+
+                if (relay.votesToFail < 1)
+                {
+                    errors.Add($"{relay.slug}: Votes to fail must be at least 1.");
+                }
+
                 if (relay.votesRequired > relay.maxPlayers)
                 {
                     errors.Add($"{relay.slug}: Votes required ({relay.votesRequired}) exceeds max players ({relay.maxPlayers}).");
