@@ -34,6 +34,37 @@ namespace TurnKit
             return new TurnKitPlayerSession(response.playerId, response.token, email);
         }
 
+        public static Task<TurnKitPlayerSession> ExchangeUgs(string idToken)
+        {
+            return ExchangeUgs(idToken, null);
+        }
+
+        public static async Task<TurnKitPlayerSession> ExchangeUgs(string idToken, string serverProof)
+        {
+            if (string.IsNullOrWhiteSpace(idToken))
+            {
+                throw new ArgumentException("UGS idToken is required.", nameof(idToken));
+            }
+
+            using var request = TurnKitClientRequest.CreateJson(
+                "/v1/client/auth/ugs/exchange",
+                "POST",
+                JsonUtility.ToJson(new UgsExchangeRequest(idToken, serverProof)));
+            var response = await TurnKitClientRequest.SendJson<UgsExchangeResponse>(request);
+
+            if (string.IsNullOrWhiteSpace(response.token))
+            {
+                throw new Exception("TurnKit UGS exchange did not return a player token.");
+            }
+
+            if (string.IsNullOrWhiteSpace(response.playerId))
+            {
+                throw new Exception("TurnKit UGS exchange did not return a player id.");
+            }
+
+            return new TurnKitPlayerSession(response.playerId, response.token);
+        }
+
         [Serializable]
         private sealed class OtpRequest
         {
@@ -60,6 +91,26 @@ namespace TurnKit
 
         [Serializable]
         private sealed class OtpVerifyResponse
+        {
+            public string token;
+            public string playerId;
+        }
+
+        [Serializable]
+        private sealed class UgsExchangeRequest
+        {
+            public string idToken;
+            public string serverProof;
+
+            public UgsExchangeRequest(string idToken, string serverProof)
+            {
+                this.idToken = idToken;
+                this.serverProof = serverProof;
+            }
+        }
+
+        [Serializable]
+        private sealed class UgsExchangeResponse
         {
             public string token;
             public string playerId;
