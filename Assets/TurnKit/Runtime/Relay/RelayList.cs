@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -29,7 +28,7 @@ namespace TurnKit
 
         public void Spawn(string slug)
         {
-            Spawn(Guid.NewGuid().ToString(), slug);
+            Relay.Instance.EnqueueSpawn(this, new ItemSpec(slug));
         }
 
         public void Spawn(string itemId, string slug)

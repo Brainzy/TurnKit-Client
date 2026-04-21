@@ -27,16 +27,21 @@ namespace TurnKit
 
         public void QueueSpawn(RelayList toList, ItemSpec itemSpec)
         {
-            var action = new RelayAction
-            {
-                action = ActionType.SPAWN,
-                toList = toList.Name,
-                items = new List<ItemSpec> { itemSpec }
-            };
-
             if (_validator.ValidateSpawn(toList))
             {
-                _queuedActions.Add(action);
+                var existingAction = GetLastSpawnActionForList(toList.Name);
+                if (existingAction != null)
+                {
+                    existingAction.items.Add(itemSpec);
+                    return;
+                }
+
+                _queuedActions.Add(new RelayAction
+                {
+                    action = ActionType.SPAWN,
+                    toList = toList.Name,
+                    items = new List<ItemSpec> { itemSpec }
+                });
             }
         }
 
@@ -208,6 +213,23 @@ namespace TurnKit
                     break;
                 }
             }
+        }
+
+        private RelayAction GetLastSpawnActionForList(string listName)
+        {
+            if (_queuedActions.Count == 0)
+            {
+                return null;
+            }
+
+            var lastAction = _queuedActions[_queuedActions.Count - 1];
+            if (lastAction.action != ActionType.SPAWN || lastAction.toList != listName)
+            {
+                return null;
+            }
+
+            lastAction.items ??= new List<ItemSpec>();
+            return lastAction;
         }
     }
 }

@@ -68,7 +68,6 @@ namespace TurnKit
 
         public ItemSpec(string slug)
         {
-            itemId = Guid.NewGuid().ToString();
             this.slug = slug;
         }
     }
@@ -107,16 +106,41 @@ namespace TurnKit
             {
                 case ActionType.SPAWN:
                     node["toList"] = toList;
-                    var itemsArray = new JSONArray();
-                    foreach (var item in items)
+                    if (ShouldSerializeSpawnAsSlugs())
                     {
-                        var itemNode = new JSONObject();
-                        itemNode["itemId"] = item.itemId;
-                        itemNode["slug"] = item.slug;
-                        itemsArray.Add(itemNode);
-                    }
+                        var slugsArray = new JSONArray();
+                        foreach (var item in items)
+                        {
+                            if (!string.IsNullOrWhiteSpace(item?.slug))
+                            {
+                                slugsArray.Add(item.slug);
+                            }
+                        }
 
-                    node["items"] = itemsArray;
+                        node["slugs"] = slugsArray;
+                    }
+                    else
+                    {
+                        var itemsArray = new JSONArray();
+                        foreach (var item in items)
+                        {
+                            if (item == null || string.IsNullOrWhiteSpace(item.slug))
+                            {
+                                continue;
+                            }
+
+                            var itemNode = new JSONObject();
+                            itemNode["slug"] = item.slug;
+                            if (!string.IsNullOrWhiteSpace(item.itemId))
+                            {
+                                itemNode["itemId"] = item.itemId;
+                            }
+
+                            itemsArray.Add(itemNode);
+                        }
+
+                        node["items"] = itemsArray;
+                    }
                     break;
 
                 case ActionType.MOVE:
@@ -207,6 +231,26 @@ namespace TurnKit
             }
 
             return selectorNode;
+        }
+
+        private bool ShouldSerializeSpawnAsSlugs()
+        {
+            if (items == null || items.Count <= 1)
+            {
+                return false;
+            }
+
+            foreach (var item in items)
+            {
+                if (item == null ||
+                    string.IsNullOrWhiteSpace(item.slug) ||
+                    !string.IsNullOrWhiteSpace(item.itemId))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 
