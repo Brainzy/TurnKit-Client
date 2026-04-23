@@ -49,10 +49,15 @@ namespace TurnKit
         private bool _reconnectInProgress;
         private float _reconnectTimer;
         private int _reconnectAttempts;
+        private float _turnTimerRemaining;
+        private float _turnTimerDuration;
+        private bool _turnTimerRunning;
 
         public static event Action<MatchStartedMessage, IReadOnlyList<RelayList>> OnMatchStarted;
         public static event Action<MoveMadeMessage, IReadOnlyList<RelayList>> OnMoveMade;
         public static event Action<TurnChangedMessage> OnTurnChanged;
+        public static event Action<float, float> OnTurnTimerChanged;
+        public static event Action OnTurnTimerExpired;
         public static event Action<VoteFailedMessage> OnVoteFailed;
         public static event Action<GameEndedMessage> OnGameEnded;
         public static event Action<ErrorMessage> OnError;
@@ -61,6 +66,9 @@ namespace TurnKit
         public static event Action OnSyncComplete;
         public static event Action<ErrorMessage> OnReconnectFailed;
         public static event Action<RelayList, ListChangeType> OnListChanged;
+        public static float TurnTimerRemainingSeconds => Instance._turnTimerRemaining;
+        public static float TurnTimerDurationSeconds => Instance._turnTimerDuration;
+        public static bool IsTurnTimerRunning => Instance._turnTimerRunning;
 
         private void Awake()
         {
@@ -116,6 +124,8 @@ namespace TurnKit
                 Instance._sessionTerminated = false;
                 Instance._allowReconnect = true;
                 Instance.ResetReconnectBackoff();
+                Instance.CacheTurnTimerDuration(slug);
+                Instance.ResetTurnTimer();
 
                 await Instance._transport.Connect(Instance._relayToken, Instance._state.LastAcknowledgedMoveNumber);
                 return true;
@@ -160,6 +170,8 @@ namespace TurnKit
             Instance._sessionTerminated = false;
             Instance._allowReconnect = true;
             Instance.ResetReconnectBackoff();
+            Instance.CacheTurnTimerDuration(slug);
+            Instance.ResetTurnTimer();
 
             return await Instance.ResumeInternal(relayToken, lastMoveNumber);
         }
@@ -449,6 +461,7 @@ namespace TurnKit
         {
             _transport?.Tick(Time.deltaTime);
             TickAutoReconnect(Time.deltaTime);
+            TickTurnTimer(Time.deltaTime);
         }
 
         private async void OnDestroy()
@@ -502,6 +515,14 @@ namespace TurnKit
                         _mySlot = localPlayer.slot;
                     }
 
+                    if (outcome.MatchStarted.yourTurn)
+                    {
+                        StartTurnTimer();
+                    }
+                    else
+                    {
+                        StopTurnTimer();
+                    }
                     OnMatchStarted?.Invoke(outcome.MatchStarted, _state.AllLists);
                     if (TurnKitConfig.Instance.enableLogging)
                     {
@@ -526,6 +547,7 @@ namespace TurnKit
 
                     break;
                 case RelayEventType.TurnChanged:
+                    StartTurnTimer();
                     OnTurnChanged?.Invoke(outcome.TurnChanged);
                     if (TurnKitConfig.Instance.enableLogging)
                     {
@@ -560,6 +582,7 @@ namespace TurnKit
                     break;
                 case RelayEventType.GameEnded:
                     OnGameEnded?.Invoke(outcome.GameEnded);
+                    StopTurnTimer();
                     DisableReconnect();
                     _transport.MarkDisconnected();
                     _state.MarkDisconnected();
@@ -649,6 +672,7 @@ namespace TurnKit
         private void HandleDisconnectInternal(string reason)
         {
             _state.MarkDisconnected();
+            StopTurnTimer();
             if (!_disconnectEventRaised)
             {
                 _disconnectEventRaised = true;
@@ -791,10 +815,78 @@ namespace TurnKit
             _reconnectTimer = 0f;
         }
 
+        private void StartTurnTimer()
+        {
+            if (_turnTimerDuration <= 0f)
+            {
+                StopTurnTimer();
+                return;
+            }
+
+            _turnTimerRemaining = _turnTimerDuration;
+            _turnTimerRunning = true;
+            OnTurnTimerChanged?.Invoke(_turnTimerRemaining, _turnTimerDuration);
+        }
+
+        private void TickTurnTimer(float deltaTime)
+        {
+            if (!_turnTimerRunning)
+            {
+                return;
+            }
+
+            _turnTimerRemaining -= deltaTime;
+            if (_turnTimerRemaining > 0f)
+            {
+                OnTurnTimerChanged?.Invoke(_turnTimerRemaining, _turnTimerDuration);
+                return;
+            }
+
+            _turnTimerRemaining = 0f;
+            _turnTimerRunning = false;
+            OnTurnTimerChanged?.Invoke(_turnTimerRemaining, _turnTimerDuration);
+            OnTurnTimerExpired?.Invoke();
+        }
+
+        private void StopTurnTimer()
+        {
+            if (!_turnTimerRunning && _turnTimerRemaining <= 0f)
+            {
+                return;
+            }
+
+            _turnTimerRunning = false;
+            _turnTimerRemaining = 0f;
+            OnTurnTimerChanged?.Invoke(_turnTimerRemaining, _turnTimerDuration);
+        }
+
+        private void ResetTurnTimer()
+        {
+            _turnTimerRunning = false;
+            _turnTimerRemaining = 0f;
+        }
+
+        private void CacheTurnTimerDuration(string slug)
+        {
+            _turnTimerDuration = 0f;
+
+            if (TurnKitConfig.Instance?.relayConfigs == null || string.IsNullOrWhiteSpace(slug))
+            {
+                return;
+            }
+
+            var relayConfig = TurnKitConfig.Instance.relayConfigs.FirstOrDefault(relay => relay != null && relay.slug == slug);
+            if (relayConfig != null && relayConfig.turnTimeoutSeconds > 0)
+            {
+                _turnTimerDuration = relayConfig.turnTimeoutSeconds;
+            }
+        }
+
         private void DisableReconnect()
         {
             _allowReconnect = false;
             _sessionTerminated = true;
+            StopTurnTimer();
             ResetReconnectBackoff();
         }
 
