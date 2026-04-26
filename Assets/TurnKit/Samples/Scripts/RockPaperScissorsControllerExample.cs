@@ -93,7 +93,7 @@ namespace TurnKit.Example
 
                 if (change.type == ChangeType.MOVE)
                 {
-                    if (change.items.Length != 1) return false; // 1 sign moved from each list
+                    if (change.ids.Length != 1) return false; // 1 sign moved from each list
                     if (myHand.Items.Count != 0 || opponentHand.Items.Count != 0) return false; // must be no items remaining
                 }
             }

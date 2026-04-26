@@ -51,7 +51,7 @@ namespace TurnKit.Example
 
         private void OnMoveMade(MoveMadeMessage message)
         {
-            int cellIndex = int.Parse(message.json);
+            int cellIndex = int.Parse(message.payload);
             bool isLegalMove = string.IsNullOrEmpty(texts[cellIndex].text) || allowInvalidMovesToggle.isOn;
             Relay.Vote(message.moveNumber, isLegalMove);
             

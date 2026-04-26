@@ -28,9 +28,9 @@ namespace TurnKit
             switch (type)
             {
                 case "MATCH_STARTED":
-                    return HandleMatchStarted(raw, node);
+                    return HandleMatchStarted(node);
                 case "MOVE_MADE":
-                    return HandleMoveMade(raw, node);
+                    return HandleMoveMade(node);
                 case "SYNC_COMPLETE":
                     return HandleSyncComplete(raw);
                 case "TURN_CHANGED":
@@ -39,29 +39,40 @@ namespace TurnKit
                     return new RelayMessageOutcome
                     {
                         EventType = RelayEventType.VoteFailed,
-                        VoteFailed = JsonUtility.FromJson<VoteFailedMessage>(raw)
+                        VoteFailed = ParseVoteFailed(node)
                     };
                 case "ERROR":
                     return new RelayMessageOutcome
                     {
                         EventType = RelayEventType.Error,
-                        Error = JsonUtility.FromJson<ErrorMessage>(raw)
+                        Error = ParseError(node)
                     };
                 case "GAME_ENDED":
                     return new RelayMessageOutcome
                     {
                         EventType = RelayEventType.GameEnded,
-                        GameEnded = JsonUtility.FromJson<GameEndedMessage>(raw)
+                        GameEnded = ParseGameEnded(node)
                     };
                 default:
                     return null;
             }
         }
 
-        private RelayMessageOutcome HandleMatchStarted(string raw, JSONNode node)
+        private RelayMessageOutcome HandleMatchStarted(JSONNode node)
         {
-            var msg = JsonUtility.FromJson<MatchStartedMessage>(raw);
-            _state.ApplyMatchStarted(msg, node);
+            var msg = new MatchStartedMessage
+            {
+                type = node["type"],
+                sessionId = node["sessionId"],
+                players = ParsePlayers(node["players"]),
+                yourTurn = node["yourTurn"].AsBool,
+                activePlayerId = node["activePlayer"],
+                lists = ParseListDefinitions(node["lists"]),
+                contents = ParseListSnapshots(node["contents"]),
+                randomSeed = (long)node["seed"].AsDouble,
+                moveNumber = GetMoveNumber(node)
+            };
+            _state.ApplyMatchStarted(msg);
 
             return new RelayMessageOutcome
             {
@@ -70,18 +81,18 @@ namespace TurnKit
             };
         }
 
-        private RelayMessageOutcome HandleMoveMade(string raw, JSONNode node)
+        private RelayMessageOutcome HandleMoveMade(JSONNode node)
         {
             var msg = new MoveMadeMessage
             {
                 type = node["type"],
-                actingPlayerId = GetActingPlayerId(node),
-                moveNumber = node["moveNumber"].AsInt,
-                json = ParseEmbeddedJson(node["json"]),
+                actingPlayerId = node["actor"],
+                moveNumber = GetMoveNumber(node),
+                payload = ParseEmbeddedJson(node["payload"]),
                 changes = ParseVisibleChanges(node["changes"])
             };
 
-            ParseStatChanges(node["statChanges"], msg);
+            ParseStatChanges(node["stats"], msg);
 
             _state.ApplyVisibleChanges(msg.changes, _notifyListChanged);
             _state.ApplyStatChanges(msg.statChanges.allChanges);
@@ -132,7 +143,12 @@ namespace TurnKit
 
         private RelayMessageOutcome HandleSyncComplete(string raw)
         {
-            var msg = JsonUtility.FromJson<SyncCompleteMessage>(raw);
+            var node = JSON.Parse(raw);
+            var msg = new SyncCompleteMessage
+            {
+                type = node["type"],
+                moveNumber = GetMoveNumber(node)
+            };
             _state.ApplySyncComplete(msg);
 
             return new RelayMessageOutcome
@@ -144,7 +160,12 @@ namespace TurnKit
 
         private RelayMessageOutcome HandleTurnChanged(string raw)
         {
-            var msg = JsonUtility.FromJson<TurnChangedMessage>(raw);
+            var node = JSON.Parse(raw);
+            var msg = new TurnChangedMessage
+            {
+                type = node["type"],
+                activePlayerId = node["activePlayer"]
+            };
             _state.ApplyTurnChanged(msg);
 
             return new RelayMessageOutcome
@@ -158,44 +179,29 @@ namespace TurnKit
         {
             var change = new VisibleChange
             {
-                type = (ChangeType)Enum.Parse(typeof(ChangeType), node["type"].Value.ToUpper()),
-                fromList = ResolveList(node["fromList"]?.Value),
-                toList = ResolveList(node["toList"]?.Value),
-                actingSlot = node["actingSlot"]?.Value
+                type = ParseChangeType(node),
+                fromList = ResolveList(node["from"]?.Value),
+                toList = ResolveList(node["to"]?.Value),
+                actingSlot = node["actorSlot"]?.Value,
+                ids = ParseStringArray(node["ids"]),
+                slugs = ParseStringArray(node["slugs"]),
+                creators = ParseIntArray(node["creators"])
             };
-
-            var itemsArray = node["items"]?.AsArray;
-            if (itemsArray == null)
-            {
-                change.items = Array.Empty<RelayItem>();
-                return change;
-            }
-
-            change.items = new RelayItem[itemsArray.Count];
-            for (int i = 0; i < itemsArray.Count; i++)
-            {
-                var itemNode = itemsArray[i];
-                change.items[i] = new RelayItem(
-                    itemNode["id"],
-                    itemNode["slug"],
-                    (TurnKitConfig.PlayerSlot)itemNode["creatorSlot"].AsInt
-                );
-            }
 
             return change;
         }
 
         private StatChange ParseStatChange(JSONNode node)
         {
-            string statName = node["statName"];
+            string statName = node["stat"];
             if (!_state.TryGetTrackedStatMetadata(statName, out var metadata))
             {
                 Debug.LogWarning($"[TurnKit] Unknown tracked stat '{statName}' in MOVE_MADE. Skipping stat change.");
                 return null;
             }
 
-            var playerIdNode = node["playerId"];
-            var oldValueNode = node["oldValue"];
+            var playerIdNode = node["player"];
+            var oldValueNode = node["old"];
             string playerId = playerIdNode == null || playerIdNode.IsNull ? null : playerIdNode.Value;
 
             switch (metadata.DataType)
@@ -262,16 +268,52 @@ namespace TurnKit
             return values;
         }
 
-        private static string GetActingPlayerId(JSONNode node)
+        private static int GetMoveNumber(JSONNode node)
         {
-            var actingPlayerId = node["actingPlayerId"];
-            if (actingPlayerId != null && !actingPlayerId.IsNull)
+            var moveNode = node["move"];
+            return moveNode?.AsInt ?? 0;
+        }
+
+        private static ChangeType ParseChangeType(JSONNode node)
+        {
+            var typeValue = node["kind"]?.Value;
+            return string.IsNullOrWhiteSpace(typeValue)
+                ? default
+                : (ChangeType)Enum.Parse(typeof(ChangeType), typeValue.ToUpperInvariant());
+        }
+
+        private static string[] ParseStringArray(JSONNode node)
+        {
+            var array = node?.AsArray;
+            if (array == null)
             {
-                return actingPlayerId.Value;
+                return Array.Empty<string>();
             }
 
-            var legacyPlayerId = node["playerId"];
-            return legacyPlayerId == null || legacyPlayerId.IsNull ? null : legacyPlayerId.Value;
+            var values = new string[array.Count];
+            for (int i = 0; i < array.Count; i++)
+            {
+                values[i] = array[i]?.Value;
+            }
+
+            return values;
+        }
+
+        private static int[] ParseIntArray(JSONNode node)
+        {
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return Array.Empty<int>();
+            }
+
+            var values = new int[array.Count];
+            for (int i = 0; i < array.Count; i++)
+            {
+                values[i] = array[i].AsInt;
+            }
+
+            return values;
         }
 
         private static string ParseEmbeddedJson(JSONNode node)
@@ -282,6 +324,107 @@ namespace TurnKit
             }
 
             return node.Tag == JSONNodeType.String ? node.Value : node.ToString();
+        }
+
+        private static PlayerInfo[] ParsePlayers(JSONNode node)
+        {
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return Array.Empty<PlayerInfo>();
+            }
+
+            var players = new PlayerInfo[array.Count];
+            for (int i = 0; i < array.Count; i++)
+            {
+                players[i] = new PlayerInfo
+                {
+                    playerId = array[i]["playerId"],
+                    slot = (TurnKitConfig.PlayerSlot)array[i]["slot"].AsInt
+                };
+            }
+
+            return players;
+        }
+
+        private static ListDefinition[] ParseListDefinitions(JSONNode node)
+        {
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return Array.Empty<ListDefinition>();
+            }
+
+            var lists = new ListDefinition[array.Count];
+            for (int i = 0; i < array.Count; i++)
+            {
+                var listNode = array[i];
+                lists[i] = new ListDefinition
+                {
+                    name = listNode["name"],
+                    tag = listNode["tag"],
+                    ownerPlayerIds = ParseStringListNode(listNode["owners"]),
+                    visibleToPlayerIds = ParseStringListNode(listNode["visibleTo"])
+                };
+            }
+
+            return lists;
+        }
+
+        private static ListSnapshot[] ParseListSnapshots(JSONNode node)
+        {
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return Array.Empty<ListSnapshot>();
+            }
+
+            var snapshots = new ListSnapshot[array.Count];
+            for (int i = 0; i < array.Count; i++)
+            {
+                snapshots[i] = new ListSnapshot
+                {
+                    ids = ParseStringArray(array[i]["ids"]),
+                    slugs = ParseStringArray(array[i]["slugs"])
+                };
+            }
+
+            return snapshots;
+        }
+
+        private static List<string> ParseStringListNode(JSONNode node)
+        {
+            var values = ParseStringArray(node);
+            return values.Length == 0 ? new List<string>() : new List<string>(values);
+        }
+
+        private static VoteFailedMessage ParseVoteFailed(JSONNode node)
+        {
+            return new VoteFailedMessage
+            {
+                type = node["type"],
+                moveNumber = node["failedMove"].AsInt,
+                failAction = node["failAction"]
+            };
+        }
+
+        private static ErrorMessage ParseError(JSONNode node)
+        {
+            return new ErrorMessage
+            {
+                type = node["type"],
+                code = node["code"],
+                message = node["msg"]
+            };
+        }
+
+        private static GameEndedMessage ParseGameEnded(JSONNode node)
+        {
+            return new GameEndedMessage
+            {
+                type = node["type"],
+                reason = node["reason"]
+            };
         }
 
         private RelayList ResolveList(string listName)

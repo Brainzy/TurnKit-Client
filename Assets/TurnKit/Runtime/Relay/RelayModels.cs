@@ -109,7 +109,7 @@ namespace TurnKit
             switch (action)
             {
                 case ActionType.SPAWN:
-                    node["toList"] = toList;
+                    node["to"] = toList;
                     if (ShouldSerializeSpawnAsSlugs())
                     {
                         var slugsArray = new JSONArray();
@@ -137,7 +137,7 @@ namespace TurnKit
                             itemNode["slug"] = item.slug;
                             if (!string.IsNullOrWhiteSpace(item.itemId))
                             {
-                                itemNode["itemId"] = item.itemId;
+                                itemNode["id"] = item.itemId;
                             }
 
                             itemsArray.Add(itemNode);
@@ -148,18 +148,18 @@ namespace TurnKit
                     break;
 
                 case ActionType.MOVE:
-                    node["fromList"] = fromList;
-                    node["toList"] = toList;
+                    node["from"] = fromList;
+                    node["to"] = toList;
                     node["selector"] = SerializeSelector();
                     node["repeat"] = repeat;
-                    node["ignoreOwnership"] = ignoreOwnership;
+                    node["ignoreOwner"] = ignoreOwnership;
                     break;
 
                 case ActionType.REMOVE:
-                    node["fromList"] = fromList;
+                    node["from"] = fromList;
                     node["selector"] = SerializeSelector();
                     node["repeat"] = repeat;
-                    node["ignoreOwnership"] = ignoreOwnership;
+                    node["ignoreOwner"] = ignoreOwnership;
                     break;
 
                 case ActionType.SHUFFLE:
@@ -169,26 +169,26 @@ namespace TurnKit
                 case ActionType.PASS_TURN:
                     if (!string.IsNullOrEmpty(playerId))
                     {
-                        node["playerId"] = playerId;
+                        node["player"] = playerId;
                     }
 
                     break;
 
                 case ActionType.SET_STAT:
-                    node["statName"] = statName;
+                    node["stat"] = statName;
                     if (!string.IsNullOrEmpty(playerId))
                     {
-                        node["playerId"] = playerId;
+                        node["player"] = playerId;
                     }
 
                     node["value"] = value ?? JSONNull.CreateOrGet();
                     break;
 
                 case ActionType.ADD_STAT:
-                    node["statName"] = statName;
+                    node["stat"] = statName;
                     if (!string.IsNullOrEmpty(playerId))
                     {
-                        node["playerId"] = playerId;
+                        node["player"] = playerId;
                     }
 
                     if (delta.HasValue)
@@ -229,7 +229,7 @@ namespace TurnKit
                         idsArray.Add(id);
                     }
 
-                    selectorNode["itemIds"] = idsArray;
+                    selectorNode["ids"] = idsArray;
                     break;
                 case SelectorType.BY_SLUGS:
                     var slugsArray = new JSONArray();
@@ -275,7 +275,7 @@ namespace TurnKit
         public bool yourTurn;
         public string activePlayerId;
         public ListDefinition[] lists;
-        public Dictionary<string, RelayItem[]> listContents;
+        public ListSnapshot[] contents;
         public long randomSeed;
         public int moveNumber;
 
@@ -317,12 +317,21 @@ namespace TurnKit
     }
 
     [Serializable]
+    public class ListSnapshot
+    {
+        public string[] ids;
+        public string[] slugs;
+    }
+
+    [Serializable]
     public class VisibleChange
     {
         public ChangeType type;
         public RelayList fromList;
         public RelayList toList;
-        public RelayItem[] items;
+        public string[] ids;
+        public string[] slugs;
+        public int[] creators;
         public string actingSlot;
     }
 
@@ -409,7 +418,7 @@ namespace TurnKit
         public string type;
         public string actingPlayerId;
         public int moveNumber;
-        public string json;
+        public string payload;
         public VisibleChange[] changes;
         public readonly TypedStatChangeCollection statChanges = new();
 

@@ -134,12 +134,12 @@ namespace TurnKit
             var msg = new JSONObject
             {
                 ["type"] = "MOVE",
-                ["shouldEndMyTurn"] = shouldEndTurn
+                ["endTurn"] = shouldEndTurn
             };
 
             if (!string.IsNullOrEmpty(_queuedJson) && _queuedJson != "null")
             {
-                msg["json"] = JSON.Parse(_queuedJson);
+                msg["payload"] = JSON.Parse(_queuedJson);
             }
 
             if (_queuedActions.Count > 0)

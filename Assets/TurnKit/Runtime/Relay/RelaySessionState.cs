@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using TurnKit.Internal.SimpleJSON;
 using UnityEngine;
 
 namespace TurnKit
@@ -91,8 +89,9 @@ namespace TurnKit
             }
         }
 
-        public void ApplyMatchStarted(MatchStartedMessage msg, JSONNode node)
+        public void ApplyMatchStarted(MatchStartedMessage msg)
         {
+            ClearListItems();
             _players.Clear();
             if (msg.players != null)
             {
@@ -106,30 +105,7 @@ namespace TurnKit
             LastAcknowledgedMoveNumber = msg.moveNumber;
             IsInSyncWindow = false;
 
-            var contentsNode = node["listContents"].AsObject;
-            if (contentsNode == null)
-            {
-                return;
-            }
-
-            foreach (var key in contentsNode.Keys)
-            {
-                if (!_listsByName.TryGetValue(key, out var relayList))
-                {
-                    continue;
-                }
-
-                var arrayNode = contentsNode[key].AsArray;
-                if (arrayNode == null)
-                {
-                    continue;
-                }
-
-                foreach (JSONNode itemNode in arrayNode)
-                {
-                    relayList.AddItem(CreateRelayItem(itemNode));
-                }
-            }
+            ApplyCompactContents(msg.contents, msg.lists);
         }
 
         public void ApplyMoveMade(MoveMadeMessage msg)
@@ -263,9 +239,12 @@ namespace TurnKit
                 return;
             }
 
-            foreach (var itemData in change.items)
+            for (int i = 0; i < change.ids.Length; i++)
             {
-                list.AddItem(new RelayItem(itemData.Id, itemData.Slug, itemData.CreatorSlot));
+                list.AddItem(new RelayItem(
+                    change.ids[i],
+                    GetSlug(change.slugs, i),
+                    GetCreatorSlot(change.creators, i)));
             }
 
             notifyListChanged?.Invoke(list, ListChangeType.ItemsAdded);
@@ -281,15 +260,19 @@ namespace TurnKit
                 return;
             }
 
-            foreach (var itemData in change.items)
+            for (int i = 0; i < change.ids.Length; i++)
             {
-                var existing = fromList.FindById(itemData.Id);
+                string itemId = change.ids[i];
+                var existing = fromList.FindById(itemId);
                 if (existing != null)
                 {
                     fromList.RemoveItem(existing);
                 }
 
-                toList.AddItem(new RelayItem(itemData.Id, itemData.Slug, itemData.CreatorSlot));
+                toList.AddItem(new RelayItem(
+                    itemId,
+                    GetSlug(change.slugs, i, existing?.Slug),
+                    existing?.CreatorSlot ?? GetCreatorSlot(change.creators, i)));
             }
 
             notifyListChanged?.Invoke(fromList, ListChangeType.ItemsRemoved);
@@ -305,9 +288,9 @@ namespace TurnKit
                 return;
             }
 
-            foreach (var itemData in change.items)
+            foreach (var itemId in change.ids)
             {
-                var existing = list.FindById(itemData.Id);
+                var existing = list.FindById(itemId);
                 if (existing != null)
                 {
                     list.RemoveItem(existing);
@@ -330,13 +313,65 @@ namespace TurnKit
             }
         }
 
-        private RelayItem CreateRelayItem(JSONNode itemNode)
+        private void ApplyCompactContents(ListSnapshot[] contents, ListDefinition[] lists)
         {
-            return new RelayItem(
-                itemNode["id"],
-                itemNode["slug"],
-                (TurnKitConfig.PlayerSlot)itemNode["creatorSlot"].AsInt
-            );
+            if (contents == null || lists == null)
+            {
+                return;
+            }
+
+            int count = Math.Min(lists.Length, contents.Length);
+            for (int i = 0; i < count; i++)
+            {
+                var listDefinition = lists[i];
+                if (listDefinition == null || string.IsNullOrWhiteSpace(listDefinition.name) ||
+                    !_listsByName.TryGetValue(listDefinition.name, out var relayList))
+                {
+                    continue;
+                }
+
+                var snapshot = contents[i];
+                if (snapshot?.ids == null)
+                {
+                    continue;
+                }
+
+                for (int itemIndex = 0; itemIndex < snapshot.ids.Length; itemIndex++)
+                {
+                    relayList.AddItem(new RelayItem(
+                        snapshot.ids[itemIndex],
+                        snapshot.slugs != null && itemIndex < snapshot.slugs.Length ? snapshot.slugs[itemIndex] : null,
+                        default));
+                }
+            }
+        }
+
+        private void ClearListItems()
+        {
+            foreach (var list in _allLists)
+            {
+                list?.ClearItems();
+            }
+        }
+
+        private static string GetSlug(string[] slugs, int index, string fallback = null)
+        {
+            if (slugs != null && index >= 0 && index < slugs.Length)
+            {
+                return slugs[index];
+            }
+
+            return fallback;
+        }
+
+        private static TurnKitConfig.PlayerSlot GetCreatorSlot(int[] creators, int index)
+        {
+            if (creators != null && index >= 0 && index < creators.Length)
+            {
+                return (TurnKitConfig.PlayerSlot)creators[index];
+            }
+
+            return default;
         }
 
         private void RegisterList(RelayList relayList)
