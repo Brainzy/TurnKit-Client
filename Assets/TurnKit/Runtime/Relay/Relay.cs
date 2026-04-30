@@ -183,14 +183,40 @@ namespace TurnKit
             Instance._commandQueue.QueueJson(json);
         }
 
-        public static MoveDispatchBuilder Commit()
+        public static void Commit()
         {
-            return new MoveDispatchBuilder(Instance, shouldEndTurn: false);
+            Instance.ExecuteQueuedActions(false, false, null);
         }
 
-        public static MoveDispatchBuilder EndTurn()
+        public static void EndMyTurn()
         {
-            return new MoveDispatchBuilder(Instance, shouldEndTurn: true);
+            Instance.ExecuteQueuedActions(true, false, null);
+        }
+
+        public static void CommitForPlayer(TurnKitConfig.PlayerSlot slot)
+        {
+            string playerId = Instance.ResolvePlayerId(slot);
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                Debug.LogError($"[TurnKit] Cannot commit delegated move to slot {slot}: no player is assigned to that slot.");
+                Instance._commandQueue.Clear();
+                return;
+            }
+
+            Instance.ExecuteQueuedActions(false, true, playerId);
+        }
+
+        public static void EndTurnForPlayer(TurnKitConfig.PlayerSlot slot)
+        {
+            string playerId = Instance.ResolvePlayerId(slot);
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                Debug.LogError($"[TurnKit] Cannot end delegated turn for slot {slot}: no player is assigned to that slot.");
+                Instance._commandQueue.Clear();
+                return;
+            }
+
+            Instance.ExecuteQueuedActions(true, true, playerId);
         }
 
         public static void PassTurnTo(TurnKitConfig.PlayerSlot slot)
@@ -950,32 +976,6 @@ namespace TurnKit
             public string relayToken;
             public string sessionId;
             public int slot;
-        }
-
-        public sealed class MoveDispatchBuilder
-        {
-            private readonly Relay _relay;
-            private readonly bool _shouldEndTurn;
-
-            internal MoveDispatchBuilder(Relay relay, bool shouldEndTurn)
-            {
-                _relay = relay;
-                _shouldEndTurn = shouldEndTurn;
-            }
-
-            public void ForPlayer(TurnKitConfig.PlayerSlot slot)
-            {
-                string playerId = _relay.ResolvePlayerId(slot);
-                if (string.IsNullOrWhiteSpace(playerId))
-                {
-                    Debug.LogError($"[TurnKit] Cannot delegate move to slot {slot}: no player is assigned to that slot.");
-                    _relay._commandQueue.Clear();
-                    return;
-                }
-
-                bool delegated = _relay._state.IsWaitingForDelegatedMove || slot != Relay.MySlot;
-                _relay.ExecuteQueuedActions(_shouldEndTurn, delegated, delegated ? playerId : null);
-            }
         }
     }
 }

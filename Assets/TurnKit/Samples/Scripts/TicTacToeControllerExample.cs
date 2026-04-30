@@ -40,7 +40,7 @@ namespace TurnKit.Example
         {
             if (!string.IsNullOrEmpty(texts[index].text) && !allowInvalidMovesToggle.isOn) return;
             Relay.SendJson(index.ToString());
-            Relay.EndTurn().ForPlayer(Relay.MySlot);
+            Relay.EndMyTurn();
         }
 
         private void OnVoteFailed(VoteFailedMessage voteFailedMessage)
