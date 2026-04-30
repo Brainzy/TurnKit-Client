@@ -119,7 +119,7 @@ namespace TurnKit
             IsInSyncWindow = false;
         }
 
-        public void ApplyTurnChanged(TurnChangedMessage msg)
+        public void ApplyTurnStarted(TurnStartedMessage msg)
         {
             CurrentTurnPlayerId = msg.activePlayerId;
             IsMyTurn = msg.activePlayerId == _myPlayerId;

@@ -24,7 +24,7 @@ namespace TurnKit.Example
             playerIdText.text = ClonesManager.IsClone() ? "player2" : "player1";
 #endif
             Relay.OnMoveMade += OnMoveMade;
-            Relay.OnTurnChanged += OnTurnChanged;
+            Relay.OnTurnStarted += OnTurnStarted;
             Relay.OnVoteFailed += OnVoteFailed;
             Relay.OnMatchStarted += (msg,initialLists) =>
             {
@@ -100,7 +100,7 @@ namespace TurnKit.Example
             return true;
         }
         
-        private void OnTurnChanged(TurnChangedMessage message)
+        private void OnTurnStarted(TurnStartedMessage message)
         {
             if (myHand.Items.Count == 1 && opponentHand.Items.Count == 1 && Relay.IsMyTurn) // both players picked their sign
             {

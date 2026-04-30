@@ -433,7 +433,7 @@ namespace TurnKit
     }
 
     [Serializable]
-    public class TurnChangedMessage
+    public class TurnStartedMessage
     {
         public string type;
         public string activePlayerId;
@@ -467,7 +467,7 @@ namespace TurnKit
         MatchStarted,
         MoveMade,
         SyncComplete,
-        TurnChanged,
+        TurnStarted,
         VoteFailed,
         Error,
         GameEnded
@@ -479,7 +479,7 @@ namespace TurnKit
         public MatchStartedMessage MatchStarted;
         public MoveMadeMessage MoveMade;
         public SyncCompleteMessage SyncComplete;
-        public TurnChangedMessage TurnChanged;
+        public TurnStartedMessage TurnStarted;
         public VoteFailedMessage VoteFailed;
         public ErrorMessage Error;
         public GameEndedMessage GameEnded;

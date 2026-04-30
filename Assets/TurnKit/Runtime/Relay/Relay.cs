@@ -55,7 +55,7 @@ namespace TurnKit
 
         public static event Action<MatchStartedMessage, IReadOnlyList<RelayList>> OnMatchStarted;
         public static event Action<MoveMadeMessage, IReadOnlyList<RelayList>> OnMoveMade;
-        public static event Action<TurnChangedMessage> OnTurnChanged;
+        public static event Action<TurnStartedMessage> OnTurnStarted;
         public static event Action<float, float> OnTurnTimerChanged;
         public static event Action OnTurnTimerExpired;
         public static event Action<VoteFailedMessage> OnVoteFailed;
@@ -546,12 +546,12 @@ namespace TurnKit
                     }
 
                     break;
-                case RelayEventType.TurnChanged:
+                case RelayEventType.TurnStarted:
                     StartTurnTimer();
-                    OnTurnChanged?.Invoke(outcome.TurnChanged);
+                    OnTurnStarted?.Invoke(outcome.TurnStarted);
                     if (TurnKitConfig.Instance.enableLogging)
                     {
-                        Debug.Log($"TurnKit - TurnChanged: {outcome.TurnChanged.activePlayerId}");
+                        Debug.Log($"TurnKit - TurnStarted: {outcome.TurnStarted.activePlayerId}");
                     }
 
                     break;

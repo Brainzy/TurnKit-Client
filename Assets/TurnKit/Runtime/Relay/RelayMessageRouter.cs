@@ -34,7 +34,7 @@ namespace TurnKit
                 case "SYNC_COMPLETE":
                     return HandleSyncComplete(raw);
                 case "TURN_STARTED":
-                    return HandleTurnChanged(raw);
+                    return HandleTurnStarted(raw);
                 case "VOTE_FAILED":
                     return new RelayMessageOutcome
                     {
@@ -158,20 +158,20 @@ namespace TurnKit
             };
         }
 
-        private RelayMessageOutcome HandleTurnChanged(string raw)
+        private RelayMessageOutcome HandleTurnStarted(string raw)
         {
             var node = JSON.Parse(raw);
-            var msg = new TurnChangedMessage
+            var msg = new TurnStartedMessage
             {
                 type = node["type"],
                 activePlayerId = node["activePlayer"]
             };
-            _state.ApplyTurnChanged(msg);
+            _state.ApplyTurnStarted(msg);
 
             return new RelayMessageOutcome
             {
-                EventType = RelayEventType.TurnChanged,
-                TurnChanged = msg
+                EventType = RelayEventType.TurnStarted,
+                TurnStarted = msg
             };
         }
 
