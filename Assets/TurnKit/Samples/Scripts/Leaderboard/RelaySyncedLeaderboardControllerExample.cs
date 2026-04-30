@@ -47,7 +47,7 @@ namespace TurnKit.Example
             Relay.Stat(ExampleConfig.Stats.Score).ForPlayer(Relay.MySlot).Add(double.Parse(scoreInput.text));
             // this stat is connected to Leaderboards via config and executes Leaderboard.SubmitScore but on backend and is verified by votes of other players in this match
             // go to asset menu TurnKit > Configuration > ExampleConfig to see connection, can use same way for your own webhooks to your backend or similar
-            Relay.EndMyTurn();
+            Relay.EndTurn().ForPlayer(Relay.MySlot);
         }
 
         public void OnEndRelayMatch()

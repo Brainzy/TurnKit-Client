@@ -48,7 +48,7 @@ namespace TurnKit.Example
         {
             if (isSignPicked) return;
             myHand.Spawn(sign);
-            Relay.EndMyTurn();
+            Relay.EndTurn().ForPlayer(Relay.MySlot);
         }
 
         private void OnVoteFailed(VoteFailedMessage voteFailedMessage)
@@ -107,7 +107,7 @@ namespace TurnKit.Example
                 Debug.Log("Both players ready. Executing Reveal...");
                 myHand.Move(SelectorType.ALL).To(revealedList);
                 opponentHand.Move(SelectorType.ALL).IgnoreOwnership().To(revealedList);
-                Relay.EndMyTurn();
+                Relay.EndTurn().ForPlayer(Relay.MySlot);
             }
         }
         

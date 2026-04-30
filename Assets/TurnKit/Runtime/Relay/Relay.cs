@@ -183,24 +183,14 @@ namespace TurnKit
             Instance._commandQueue.QueueJson(json);
         }
 
-        public static void Commit()
+        public static MoveDispatchBuilder Commit()
         {
-            Instance.ExecuteQueuedActions(false, false, null);
+            return new MoveDispatchBuilder(Instance, shouldEndTurn: false);
         }
 
-        public static void EndMyTurn()
+        public static MoveDispatchBuilder EndTurn()
         {
-            Instance.ExecuteQueuedActions(true, false, null);
-        }
-
-        public static void CommitDelegated(string delegateForPlayerId)
-        {
-            Instance.ExecuteQueuedActions(false, true, delegateForPlayerId);
-        }
-
-        public static void EndDelegatedTurn(string delegateForPlayerId)
-        {
-            Instance.ExecuteQueuedActions(true, true, delegateForPlayerId);
+            return new MoveDispatchBuilder(Instance, shouldEndTurn: true);
         }
 
         public static void PassTurnTo(TurnKitConfig.PlayerSlot slot)
@@ -960,6 +950,32 @@ namespace TurnKit
             public string relayToken;
             public string sessionId;
             public int slot;
+        }
+
+        public sealed class MoveDispatchBuilder
+        {
+            private readonly Relay _relay;
+            private readonly bool _shouldEndTurn;
+
+            internal MoveDispatchBuilder(Relay relay, bool shouldEndTurn)
+            {
+                _relay = relay;
+                _shouldEndTurn = shouldEndTurn;
+            }
+
+            public void ForPlayer(TurnKitConfig.PlayerSlot slot)
+            {
+                string playerId = _relay.ResolvePlayerId(slot);
+                if (string.IsNullOrWhiteSpace(playerId))
+                {
+                    Debug.LogError($"[TurnKit] Cannot delegate move to slot {slot}: no player is assigned to that slot.");
+                    _relay._commandQueue.Clear();
+                    return;
+                }
+
+                bool delegated = _relay._state.IsWaitingForDelegatedMove || slot != Relay.MySlot;
+                _relay.ExecuteQueuedActions(_shouldEndTurn, delegated, delegated ? playerId : null);
+            }
         }
     }
 }
