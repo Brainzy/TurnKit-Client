@@ -33,7 +33,7 @@ namespace TurnKit
                     return HandleMoveMade(node);
                 case "SYNC_COMPLETE":
                     return HandleSyncComplete(raw);
-                case "TURN_CHANGED":
+                case "TURN_STARTED":
                     return HandleTurnChanged(raw);
                 case "VOTE_FAILED":
                     return new RelayMessageOutcome
