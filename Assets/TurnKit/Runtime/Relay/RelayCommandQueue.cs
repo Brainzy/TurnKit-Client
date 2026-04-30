@@ -127,7 +127,7 @@ namespace TurnKit
             });
         }
 
-        public string BuildMovePayload(bool shouldEndTurn)
+        public string BuildMovePayload(bool shouldEndTurn, bool delegated = false, string delegateForPlayerId = null)
         {
             ExecutePendingBuilders();
 
@@ -151,6 +151,15 @@ namespace TurnKit
                 }
 
                 msg["actions"] = actionArray;
+            }
+
+            if (delegated)
+            {
+                msg["delegated"] = true;
+                if (!string.IsNullOrWhiteSpace(delegateForPlayerId))
+                {
+                    msg["delegateFor"] = delegateForPlayerId;
+                }
             }
 
             return msg.ToString();

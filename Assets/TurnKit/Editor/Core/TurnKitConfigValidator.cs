@@ -213,6 +213,12 @@ namespace TurnKit.Editor
 
         private static void ValidateRelay(TurnKitConfig.RelayConfig relay, List<string> errors)
         {
+            relay.reconnectMoveHistorySize = Mathf.Clamp(relay.reconnectMoveHistorySize, 0, 20);
+            if (relay.revealPrivateListsOnTimeout && relay.onTurnTimeout != TurnKitConfig.OnTurnTimeout.DELEGATE_MOVE)
+            {
+                errors.Add($"{relay.slug}: Reveal private lists on timeout requires onTurnTimeout=DELEGATE_MOVE.");
+            }
+
             if (relay.votingEnabled)
             {
                 if (relay.votesRequired < 1)

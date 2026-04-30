@@ -265,6 +265,9 @@ namespace TurnKit.Editor
                 EditorGUILayout.IntField("Match timeout (minutes)", relay.matchTimeoutMinutes);
                 EditorGUILayout.IntField("Turn timeout (seconds)", relay.turnTimeoutSeconds);
                 EditorGUILayout.IntField("Wait reconnect (seconds)", relay.waitReconnectSeconds);
+                EditorGUILayout.IntField("Reconnect move history size", relay.reconnectMoveHistorySize);
+                EditorGUILayout.EnumPopup("On turn timeout", relay.onTurnTimeout);
+                EditorGUILayout.Toggle("Reveal private lists on timeout", relay.revealPrivateListsOnTimeout);
                 GUILayout.Space(5);
 
                 EditorGUILayout.LabelField($"Lists ({relay.lists.Count})", EditorStyles.boldLabel);
@@ -491,6 +494,9 @@ namespace TurnKit.Editor
                 matchTimeoutMinutes = 10,
                 turnTimeoutSeconds = 60,
                 waitReconnectSeconds = 45,
+                reconnectMoveHistorySize = 0,
+                onTurnTimeout = TurnKitConfig.OnTurnTimeout.CHANGE_TO_NEXT_PLAYER,
+                revealPrivateListsOnTimeout = false,
                 ignoreAllOwnership = false,
                 lists = new List<TurnKitConfig.RelayListConfig>(),
                 trackedStats = new List<TurnKitConfig.TrackedStatConfig>()

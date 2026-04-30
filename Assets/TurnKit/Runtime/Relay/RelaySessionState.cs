@@ -53,6 +53,8 @@ namespace TurnKit
         public bool IsMyTurn { get; private set; }
         public bool IsInSyncWindow { get; private set; }
         public int LastAcknowledgedMoveNumber { get; private set; }
+        public bool IsWaitingForDelegatedMove { get; private set; }
+        public string DelegatedMoveRequestedForPlayerId { get; private set; }
 
         public void SetLocalPlayer(string playerId)
         {
@@ -104,6 +106,8 @@ namespace TurnKit
             IsMyTurn = msg.yourTurn;
             LastAcknowledgedMoveNumber = msg.moveNumber;
             IsInSyncWindow = false;
+            IsWaitingForDelegatedMove = false;
+            DelegatedMoveRequestedForPlayerId = null;
 
             ApplyCompactContents(msg.contents, msg.lists);
         }
@@ -111,6 +115,8 @@ namespace TurnKit
         public void ApplyMoveMade(MoveMadeMessage msg)
         {
             LastAcknowledgedMoveNumber = msg.moveNumber;
+            IsWaitingForDelegatedMove = false;
+            DelegatedMoveRequestedForPlayerId = null;
         }
 
         public void ApplySyncComplete(SyncCompleteMessage msg)
@@ -123,6 +129,48 @@ namespace TurnKit
         {
             CurrentTurnPlayerId = msg.activePlayerId;
             IsMyTurn = msg.activePlayerId == _myPlayerId;
+            LastAcknowledgedMoveNumber = msg.moveNumber;
+            IsWaitingForDelegatedMove = false;
+            DelegatedMoveRequestedForPlayerId = null;
+        }
+
+        public void ApplyMoveRequestedForPlayer(MoveRequestedForPlayerMessage msg)
+        {
+            LastAcknowledgedMoveNumber = msg.moveNumber;
+            IsWaitingForDelegatedMove = true;
+            DelegatedMoveRequestedForPlayerId = msg.playerId;
+        }
+
+        public void ApplyPrivateListsRevealed(PrivateListsRevealedMessage msg, Action<RelayList, ListChangeType> notifyListChanged)
+        {
+            if (msg?.lists == null)
+            {
+                return;
+            }
+
+            LastAcknowledgedMoveNumber = msg.moveNumber;
+            foreach (var reveal in msg.lists)
+            {
+                if (reveal == null || string.IsNullOrWhiteSpace(reveal.name) || !_listsByName.TryGetValue(reveal.name, out var relayList))
+                {
+                    continue;
+                }
+
+                int count = Math.Min(reveal.ids?.Length ?? 0, reveal.slugs?.Length ?? 0);
+                for (int i = 0; i < count; i++)
+                {
+                    var existing = relayList.FindById(reveal.ids[i]);
+                    if (existing == null)
+                    {
+                        continue;
+                    }
+
+                    relayList.RemoveItem(existing);
+                    relayList.AddItem(new RelayItem(existing.Id, reveal.slugs[i], existing.CreatorSlot));
+                }
+
+                notifyListChanged?.Invoke(relayList, ListChangeType.ItemsMoved);
+            }
         }
 
         public void MarkConnected()

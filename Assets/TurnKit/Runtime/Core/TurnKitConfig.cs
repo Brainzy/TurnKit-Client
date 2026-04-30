@@ -77,6 +77,9 @@ namespace TurnKit
             public int matchTimeoutMinutes = 10;
             public int turnTimeoutSeconds = 60;
             public int waitReconnectSeconds = 45;
+            public int reconnectMoveHistorySize = 0;
+            public OnTurnTimeout onTurnTimeout = OnTurnTimeout.CHANGE_TO_NEXT_PLAYER;
+            public bool revealPrivateListsOnTimeout = false;
             public List<RelayListConfig> lists = new();
             public List<TrackedStatConfig> trackedStats = new();
         }
@@ -158,6 +161,12 @@ namespace TurnKit
         {
             SKIP_TURN,
             END_GAME
+        }
+
+        public enum OnTurnTimeout
+        {
+            CHANGE_TO_NEXT_PLAYER,
+            DELEGATE_MOVE
         }
 
         public enum TrackedStatDataType

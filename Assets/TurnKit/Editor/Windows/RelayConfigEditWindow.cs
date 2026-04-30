@@ -73,6 +73,13 @@ namespace TurnKit.Editor
             relay.matchTimeoutMinutes = EditorGUILayout.IntField("Match Timeout (minutes)", relay.matchTimeoutMinutes);
             relay.turnTimeoutSeconds = EditorGUILayout.IntField("Turn Timeout (seconds)", relay.turnTimeoutSeconds);
             relay.waitReconnectSeconds = EditorGUILayout.IntField("Wait Reconnect (seconds)", relay.waitReconnectSeconds);
+            relay.reconnectMoveHistorySize = EditorGUILayout.IntSlider("Reconnect Move History Size", relay.reconnectMoveHistorySize, 0, 20);
+            relay.onTurnTimeout = (TurnKitConfig.OnTurnTimeout)EditorGUILayout.EnumPopup("On Turn Timeout", relay.onTurnTimeout);
+            relay.revealPrivateListsOnTimeout = EditorGUILayout.Toggle("Reveal Private Lists On Timeout", relay.revealPrivateListsOnTimeout);
+            if (relay.revealPrivateListsOnTimeout && relay.onTurnTimeout != TurnKitConfig.OnTurnTimeout.DELEGATE_MOVE)
+            {
+                EditorGUILayout.HelpBox("Reveal Private Lists On Timeout requires On Turn Timeout = DELEGATE_MOVE.", MessageType.Error);
+            }
             EditorGUILayout.EndVertical();
         }
 

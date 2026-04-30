@@ -56,6 +56,8 @@ namespace TurnKit
         public static event Action<MatchStartedMessage, IReadOnlyList<RelayList>> OnMatchStarted;
         public static event Action<MoveMadeMessage, IReadOnlyList<RelayList>> OnMoveMade;
         public static event Action<TurnStartedMessage> OnTurnStarted;
+        public static event Action<MoveRequestedForPlayerMessage> OnMoveRequestedForPlayer;
+        public static event Action<PrivateListsRevealedMessage> OnPrivateListsRevealed;
         public static event Action<float, float> OnTurnTimerChanged;
         public static event Action OnTurnTimerExpired;
         public static event Action<VoteFailedMessage> OnVoteFailed;
@@ -183,12 +185,22 @@ namespace TurnKit
 
         public static void Commit()
         {
-            Instance.ExecuteQueuedActions(false);
+            Instance.ExecuteQueuedActions(false, false, null);
         }
 
         public static void EndMyTurn()
         {
-            Instance.ExecuteQueuedActions(true);
+            Instance.ExecuteQueuedActions(true, false, null);
+        }
+
+        public static void CommitDelegated(string delegateForPlayerId)
+        {
+            Instance.ExecuteQueuedActions(false, true, delegateForPlayerId);
+        }
+
+        public static void EndDelegatedTurn(string delegateForPlayerId)
+        {
+            Instance.ExecuteQueuedActions(true, true, delegateForPlayerId);
         }
 
         public static void PassTurnTo(TurnKitConfig.PlayerSlot slot)
@@ -201,7 +213,7 @@ namespace TurnKit
             }
 
             Instance._commandQueue.QueuePassTurn(playerId);
-            Instance.ExecuteQueuedActions(false);
+            Instance.ExecuteQueuedActions(false, false, null);
         }
 
         public static TBuilder Stat<TValue, TBuilder>(MatchStatToken<TValue, TBuilder> token)
@@ -334,6 +346,8 @@ namespace TurnKit
 
         public static bool IsReady => Instance._transport.IsConnected && !Instance._state.IsInSyncWindow;
         public static bool IsMyTurn => Instance._state.IsMyTurn;
+        public static bool IsWaitingForDelegatedMove => Instance._state.IsWaitingForDelegatedMove;
+        public static string DelegatedMoveRequestedForPlayerId => Instance._state.DelegatedMoveRequestedForPlayerId;
         public static int LastAcknowledgedMoveNumber => Instance._state.LastAcknowledgedMoveNumber;
         public static string MyPlayerId => Instance._myPlayerId;
         public static TurnKitConfig.PlayerSlot MySlot => Instance._mySlot;
@@ -442,18 +456,18 @@ namespace TurnKit
             throw new InvalidOperationException($"[TurnKit] Stat '{metadata.Name}' does not map to builder type '{typeof(TBuilder).Name}'.");
         }
 
-        private void ExecuteQueuedActions(bool shouldEndTurn)
+        private void ExecuteQueuedActions(bool shouldEndTurn, bool delegated, string delegateForPlayerId)
         {
             _validator.ValidateReadyToSend(_transport.IsConnected, _state.IsInSyncWindow);
 
-            if (!_state.IsMyTurn)
+            if (!_state.IsMyTurn && !delegated)
             {
                 Debug.LogError("[TurnKit] Not your turn. Actions not sent.");
                 _commandQueue.Clear();
                 return;
             }
 
-            _transport.Send(_commandQueue.BuildMovePayload(shouldEndTurn));
+            _transport.Send(_commandQueue.BuildMovePayload(shouldEndTurn, delegated, delegateForPlayerId));
             _commandQueue.Clear();
         }
 
@@ -555,6 +569,23 @@ namespace TurnKit
                     }
 
                     break;
+                case RelayEventType.MoveRequestedForPlayer:
+                    StopTurnTimer();
+                    OnMoveRequestedForPlayer?.Invoke(outcome.MoveRequestedForPlayer);
+                    if (TurnKitConfig.Instance.enableLogging)
+                    {
+                        Debug.Log($"TurnKit - MoveRequestedForPlayer: {outcome.MoveRequestedForPlayer.playerId}");
+                    }
+
+                    break;
+                case RelayEventType.PrivateListsRevealed:
+                    OnPrivateListsRevealed?.Invoke(outcome.PrivateListsRevealed);
+                    if (TurnKitConfig.Instance.enableLogging)
+                    {
+                        Debug.Log($"TurnKit - PrivateListsRevealed for: {outcome.PrivateListsRevealed.playerId}");
+                    }
+
+                    break;
                 case RelayEventType.VoteFailed:
                     OnVoteFailed?.Invoke(outcome.VoteFailed);
                     if (TurnKitConfig.Instance.enableLogging)
@@ -565,7 +596,7 @@ namespace TurnKit
                     break;
                 case RelayEventType.Error:
                     OnError?.Invoke(outcome.Error);
-                    if (IsReconnectExpiredError(outcome.Error))
+                    if (IsReconnectTerminalError(outcome.Error))
                     {
                         DisableReconnect();
                         OnReconnectFailed?.Invoke(outcome.Error);
@@ -901,9 +932,15 @@ namespace TurnKit
             return error != null && string.Equals(error.code, "STALE_SOCKET", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool IsReconnectExpiredError(ErrorMessage error)
+        private static bool IsReconnectTerminalError(ErrorMessage error)
         {
-            return error != null && string.Equals(error.code, "RECONNECT_EXPIRED", StringComparison.OrdinalIgnoreCase);
+            if (error == null)
+            {
+                return false;
+            }
+
+            return string.Equals(error.code, "RECONNECT_EXPIRED", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(error.code, "RECONNECT_MOVE_GAP_TOO_LARGE", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task ReconnectFromStaleSocketError()

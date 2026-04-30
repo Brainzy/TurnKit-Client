@@ -350,6 +350,9 @@ namespace TurnKit.Editor
                 matchTimeoutMinutes = node["matchTimeoutMinutes"].AsInt,
                 turnTimeoutSeconds = node["turnTimeoutSeconds"].AsInt,
                 waitReconnectSeconds = node["waitReconnectSeconds"].AsInt,
+                reconnectMoveHistorySize = node["reconnectMoveHistorySize"].AsInt,
+                onTurnTimeout = ParseNullableEnum(node["onTurnTimeout"], TurnKitConfig.OnTurnTimeout.CHANGE_TO_NEXT_PLAYER),
+                revealPrivateListsOnTimeout = node["revealPrivateListsOnTimeout"].AsBool,
                 lists = ParseRelayLists(node["lists"]),
                 trackedStats = ParseTrackedStats(node["trackedStats"])
             };
@@ -562,6 +565,9 @@ namespace TurnKit.Editor
             node["matchTimeoutMinutes"] = relay.matchTimeoutMinutes;
             node["turnTimeoutSeconds"] = relay.turnTimeoutSeconds;
             node["waitReconnectSeconds"] = relay.waitReconnectSeconds;
+            node["reconnectMoveHistorySize"] = Mathf.Clamp(relay.reconnectMoveHistorySize, 0, 20);
+            node["onTurnTimeout"] = relay.onTurnTimeout.ToString();
+            node["revealPrivateListsOnTimeout"] = relay.revealPrivateListsOnTimeout;
             node["lists"] = BuildRelayListsNode(relay.lists);
             node["trackedStats"] = BuildTrackedStatsNode(relay.trackedStats);
             return node.ToString();

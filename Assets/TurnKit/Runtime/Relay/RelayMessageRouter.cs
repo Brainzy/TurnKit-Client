@@ -35,6 +35,10 @@ namespace TurnKit
                     return HandleSyncComplete(raw);
                 case "TURN_STARTED":
                     return HandleTurnStarted(raw);
+                case "MOVE_REQUESTED_FOR_PLAYER":
+                    return HandleMoveRequestedForPlayer(node);
+                case "PRIVATE_LISTS_REVEALED":
+                    return HandlePrivateListsRevealed(node);
                 case "VOTE_FAILED":
                     return new RelayMessageOutcome
                     {
@@ -164,7 +168,8 @@ namespace TurnKit
             var msg = new TurnStartedMessage
             {
                 type = node["type"],
-                activePlayerId = node["activePlayer"]
+                activePlayerId = node["activePlayer"],
+                moveNumber = GetMoveNumber(node)
             };
             _state.ApplyTurnStarted(msg);
 
@@ -172,6 +177,41 @@ namespace TurnKit
             {
                 EventType = RelayEventType.TurnStarted,
                 TurnStarted = msg
+            };
+        }
+
+        private RelayMessageOutcome HandleMoveRequestedForPlayer(JSONNode node)
+        {
+            var msg = new MoveRequestedForPlayerMessage
+            {
+                type = node["type"],
+                playerId = node["playerId"],
+                moveNumber = GetMoveNumber(node)
+            };
+            _state.ApplyMoveRequestedForPlayer(msg);
+
+            return new RelayMessageOutcome
+            {
+                EventType = RelayEventType.MoveRequestedForPlayer,
+                MoveRequestedForPlayer = msg
+            };
+        }
+
+        private RelayMessageOutcome HandlePrivateListsRevealed(JSONNode node)
+        {
+            var msg = new PrivateListsRevealedMessage
+            {
+                type = node["type"],
+                playerId = node["playerId"],
+                moveNumber = GetMoveNumber(node),
+                lists = ParsePrivateListReveals(node["lists"])
+            };
+            _state.ApplyPrivateListsRevealed(msg, _notifyListChanged);
+
+            return new RelayMessageOutcome
+            {
+                EventType = RelayEventType.PrivateListsRevealed,
+                PrivateListsRevealed = msg
             };
         }
 
@@ -390,6 +430,28 @@ namespace TurnKit
             }
 
             return snapshots;
+        }
+
+        private static PrivateListRevealMessage[] ParsePrivateListReveals(JSONNode node)
+        {
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return Array.Empty<PrivateListRevealMessage>();
+            }
+
+            var reveals = new PrivateListRevealMessage[array.Count];
+            for (int i = 0; i < array.Count; i++)
+            {
+                reveals[i] = new PrivateListRevealMessage
+                {
+                    name = array[i]["name"],
+                    ids = ParseStringArray(array[i]["ids"]),
+                    slugs = ParseStringArray(array[i]["slugs"])
+                };
+            }
+
+            return reveals;
         }
 
         private static List<string> ParseStringListNode(JSONNode node)
