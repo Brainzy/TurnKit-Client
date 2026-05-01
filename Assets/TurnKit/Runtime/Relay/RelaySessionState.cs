@@ -134,22 +134,23 @@ namespace TurnKit
             DelegatedMoveRequestedForPlayerId = null;
         }
 
-        public void ApplyMoveRequestedForPlayer(MoveRequestedForPlayerMessage msg)
+        public void ApplyMoveRequestedForPlayer(MoveRequestedForPlayerMessage msg, Action<RelayList, ListChangeType> notifyListChanged)
         {
             LastAcknowledgedMoveNumber = msg.moveNumber;
             IsWaitingForDelegatedMove = true;
             DelegatedMoveRequestedForPlayerId = msg.playerId;
+            ApplyPrivateListRevealPayload(msg?.lists, msg?.moveNumber ?? LastAcknowledgedMoveNumber, notifyListChanged);
         }
 
-        public void ApplyPrivateListsRevealed(PrivateListsRevealedMessage msg, Action<RelayList, ListChangeType> notifyListChanged)
+        private void ApplyPrivateListRevealPayload(PrivateListRevealMessage[] lists, int moveNumber, Action<RelayList, ListChangeType> notifyListChanged)
         {
-            if (msg?.lists == null)
+            if (lists == null)
             {
                 return;
             }
 
-            LastAcknowledgedMoveNumber = msg.moveNumber;
-            foreach (var reveal in msg.lists)
+            LastAcknowledgedMoveNumber = moveNumber;
+            foreach (var reveal in lists)
             {
                 if (reveal == null || string.IsNullOrWhiteSpace(reveal.name) || !_listsByName.TryGetValue(reveal.name, out var relayList))
                 {

@@ -57,7 +57,6 @@ namespace TurnKit
         public static event Action<MoveMadeMessage, IReadOnlyList<RelayList>> OnMoveMade;
         public static event Action<TurnStartedMessage> OnTurnStarted;
         public static event Action<MoveRequestedForPlayerMessage> OnMoveRequestedForPlayer;
-        public static event Action<PrivateListsRevealedMessage> OnPrivateListsRevealed;
         public static event Action<float, float> OnTurnTimerChanged;
         public static event Action OnTurnTimerExpired;
         public static event Action<VoteFailedMessage> OnVoteFailed;
@@ -591,14 +590,6 @@ namespace TurnKit
                     if (TurnKitConfig.Instance.enableLogging)
                     {
                         Debug.Log($"TurnKit - MoveRequestedForPlayer: {outcome.MoveRequestedForPlayer.playerId}");
-                    }
-
-                    break;
-                case RelayEventType.PrivateListsRevealed:
-                    OnPrivateListsRevealed?.Invoke(outcome.PrivateListsRevealed);
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log($"TurnKit - PrivateListsRevealed for: {outcome.PrivateListsRevealed.playerId}");
                     }
 
                     break;

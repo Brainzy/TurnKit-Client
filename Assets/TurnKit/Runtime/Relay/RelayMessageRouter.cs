@@ -37,8 +37,6 @@ namespace TurnKit
                     return HandleTurnStarted(raw);
                 case "MOVE_REQUESTED_FOR_PLAYER":
                     return HandleMoveRequestedForPlayer(node);
-                case "PRIVATE_LISTS_REVEALED":
-                    return HandlePrivateListsRevealed(node);
                 case "VOTE_FAILED":
                     return new RelayMessageOutcome
                     {
@@ -186,32 +184,15 @@ namespace TurnKit
             {
                 type = node["type"],
                 playerId = node["playerId"],
+                lists = ParsePrivateListReveals(node["lists"]),
                 moveNumber = GetMoveNumber(node)
             };
-            _state.ApplyMoveRequestedForPlayer(msg);
+            _state.ApplyMoveRequestedForPlayer(msg, _notifyListChanged);
 
             return new RelayMessageOutcome
             {
                 EventType = RelayEventType.MoveRequestedForPlayer,
                 MoveRequestedForPlayer = msg
-            };
-        }
-
-        private RelayMessageOutcome HandlePrivateListsRevealed(JSONNode node)
-        {
-            var msg = new PrivateListsRevealedMessage
-            {
-                type = node["type"],
-                playerId = node["playerId"],
-                moveNumber = GetMoveNumber(node),
-                lists = ParsePrivateListReveals(node["lists"])
-            };
-            _state.ApplyPrivateListsRevealed(msg, _notifyListChanged);
-
-            return new RelayMessageOutcome
-            {
-                EventType = RelayEventType.PrivateListsRevealed,
-                PrivateListsRevealed = msg
             };
         }
 

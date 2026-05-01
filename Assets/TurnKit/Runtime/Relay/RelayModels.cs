@@ -445,6 +445,7 @@ namespace TurnKit
     {
         public string type;
         public string playerId;
+        public PrivateListRevealMessage[] lists;
         public int moveNumber;
     }
 
@@ -454,15 +455,6 @@ namespace TurnKit
         public string name;
         public string[] ids;
         public string[] slugs;
-    }
-
-    [Serializable]
-    public class PrivateListsRevealedMessage
-    {
-        public string type;
-        public string playerId;
-        public int moveNumber;
-        public PrivateListRevealMessage[] lists;
     }
 
     [Serializable]
@@ -495,7 +487,6 @@ namespace TurnKit
         SyncComplete,
         TurnStarted,
         MoveRequestedForPlayer,
-        PrivateListsRevealed,
         VoteFailed,
         Error,
         GameEnded
@@ -509,7 +500,6 @@ namespace TurnKit
         public SyncCompleteMessage SyncComplete;
         public TurnStartedMessage TurnStarted;
         public MoveRequestedForPlayerMessage MoveRequestedForPlayer;
-        public PrivateListsRevealedMessage PrivateListsRevealed;
         public VoteFailedMessage VoteFailed;
         public ErrorMessage Error;
         public GameEndedMessage GameEnded;
