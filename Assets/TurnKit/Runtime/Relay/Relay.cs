@@ -7,6 +7,12 @@ using UnityEngine;
 
 namespace TurnKit
 {
+    public enum FillPolicy
+    {
+        REQUIRE_ALL_PLAYERS,
+        ALLOW_DELEGATED_SLOTS
+    }
+
     public class Relay : MonoBehaviour
     {
         private const bool AutoReconnectEnabled = true;
@@ -78,22 +84,42 @@ namespace TurnKit
             _messageRouter = new RelayMessageRouter(_state, DispatchListChanged);
         }
 
-        public static Task<bool> MatchWithAnyone(string playerId, string slug, Dictionary<string, List<RelayItem>> items = null)
+        public static Task<bool> MatchWithAnyone(
+            string playerId,
+            string slug,
+            Dictionary<string, List<RelayItem>> items = null,
+            FillPolicy fillPolicy = FillPolicy.REQUIRE_ALL_PLAYERS,
+            int? delegatedFillAfterSeconds = null)
         {
-            return MatchWithAnyone(TurnKitClientIdentity.NoAuth(playerId), slug, items);
+            return MatchWithAnyone(TurnKitClientIdentity.NoAuth(playerId), slug, items, fillPolicy, delegatedFillAfterSeconds);
         }
 
-        public static Task<bool> MatchWithAnyone(TurnKitPlayerSession session, string slug, Dictionary<string, List<RelayItem>> items = null)
+        public static Task<bool> MatchWithAnyone(
+            TurnKitPlayerSession session,
+            string slug,
+            Dictionary<string, List<RelayItem>> items = null,
+            FillPolicy fillPolicy = FillPolicy.REQUIRE_ALL_PLAYERS,
+            int? delegatedFillAfterSeconds = null)
         {
-            return MatchWithAnyone(TurnKitClientIdentity.Authenticated(session), slug, items);
+            return MatchWithAnyone(TurnKitClientIdentity.Authenticated(session), slug, items, fillPolicy, delegatedFillAfterSeconds);
         }
 
-        public static Task<bool> MatchWithAnyone(TurnKitYourBackendProof proof, string slug, Dictionary<string, List<RelayItem>> items = null)
+        public static Task<bool> MatchWithAnyone(
+            TurnKitYourBackendProof proof,
+            string slug,
+            Dictionary<string, List<RelayItem>> items = null,
+            FillPolicy fillPolicy = FillPolicy.REQUIRE_ALL_PLAYERS,
+            int? delegatedFillAfterSeconds = null)
         {
-            return MatchWithAnyone(TurnKitClientIdentity.YourBackend(proof), slug, items);
+            return MatchWithAnyone(TurnKitClientIdentity.YourBackend(proof), slug, items, fillPolicy, delegatedFillAfterSeconds);
         }
 
-        private static async Task<bool> MatchWithAnyone(TurnKitClientIdentity identity, string slug, Dictionary<string, List<RelayItem>> items = null)
+        private static async Task<bool> MatchWithAnyone(
+            TurnKitClientIdentity identity,
+            string slug,
+            Dictionary<string, List<RelayItem>> items = null,
+            FillPolicy fillPolicy = FillPolicy.REQUIRE_ALL_PLAYERS,
+            int? delegatedFillAfterSeconds = null)
         {
             if (string.IsNullOrWhiteSpace(slug))
             {
@@ -110,7 +136,7 @@ namespace TurnKit
                 return false;
             }
 
-            var body = BuildQueueRequestJson(slug, items);
+            var body = BuildQueueRequestJson(slug, items, fillPolicy, delegatedFillAfterSeconds);
             using var req = TurnKitClientRequest.CreateJson("/v1/client/relay/queue", "POST", body);
             await TurnKitClientRequest.PrepareIdentity(req, identity);
 
@@ -125,7 +151,6 @@ namespace TurnKit
                 Instance._sessionTerminated = false;
                 Instance._allowReconnect = true;
                 Instance.ResetReconnectBackoff();
-                Instance.CacheTurnTimerDuration(slug);
                 Instance.ResetTurnTimer();
 
                 await Instance._transport.Connect(Instance._relayToken, Instance._state.LastAcknowledgedMoveNumber);
@@ -171,7 +196,6 @@ namespace TurnKit
             Instance._sessionTerminated = false;
             Instance._allowReconnect = true;
             Instance.ResetReconnectBackoff();
-            Instance.CacheTurnTimerDuration(slug);
             Instance.ResetTurnTimer();
 
             return await Instance.ResumeInternal(relayToken, lastMoveNumber);
@@ -367,11 +391,43 @@ namespace TurnKit
         public static string MyPlayerId => Instance._myPlayerId;
         public static TurnKitConfig.PlayerSlot MySlot => Instance._mySlot;
         public static string CurrentPlayerId => Instance._state.CurrentTurnPlayerId;
+        public static bool IsCurrentPlayerDelegated => Instance._state.IsPlayerDelegated(Instance._state.CurrentTurnPlayerId);
         public static IReadOnlyList<PlayerInfo> AllPlayers => Instance._state.AllPlayers;
 
         public static PlayerInfo GetPlayerBySlot(TurnKitConfig.PlayerSlot slot)
         {
             return Instance._state.GetPlayerBySlot(slot);
+        }
+
+        public static bool IsPlayerDelegated(string playerId)
+        {
+            return Instance._state.IsPlayerDelegated(playerId);
+        }
+
+        public static void CommitForActiveDelegatedPlayer()
+        {
+            string delegatedPlayerId = Instance._state.CurrentTurnPlayerId;
+            if (!Instance._state.IsPlayerDelegated(delegatedPlayerId))
+            {
+                Debug.LogError("[TurnKit] Active player is not delegated. Delegated move not sent.");
+                Instance._commandQueue.Clear();
+                return;
+            }
+
+            Instance.ExecuteQueuedActions(false, true, delegatedPlayerId);
+        }
+
+        public static void EndTurnForActiveDelegatedPlayer()
+        {
+            string delegatedPlayerId = Instance._state.CurrentTurnPlayerId;
+            if (!Instance._state.IsPlayerDelegated(delegatedPlayerId))
+            {
+                Debug.LogError("[TurnKit] Active player is not delegated. Delegated end turn not sent.");
+                Instance._commandQueue.Clear();
+                return;
+            }
+
+            Instance.ExecuteQueuedActions(true, true, delegatedPlayerId);
         }
 
         internal void EnqueueSpawn(RelayList toList, ItemSpec itemSpec)
@@ -546,7 +602,7 @@ namespace TurnKit
 
                     if (outcome.MatchStarted.yourTurn)
                     {
-                        StartTurnTimer();
+                        ApplyTurnTimerFromServer(outcome.MatchStarted.serverNowUtcMs, outcome.MatchStarted.timerEndUtcMs);
                     }
                     else
                     {
@@ -568,6 +624,7 @@ namespace TurnKit
 
                     break;
                 case RelayEventType.SyncComplete:
+                    ApplyTurnTimerFromServer(outcome.SyncComplete.serverNowUtcMs, outcome.SyncComplete.timerEndUtcMs);
                     OnSyncComplete?.Invoke();
                     if (TurnKitConfig.Instance.enableLogging)
                     {
@@ -576,7 +633,7 @@ namespace TurnKit
 
                     break;
                 case RelayEventType.TurnStarted:
-                    StartTurnTimer();
+                    ApplyTurnTimerFromServer(outcome.TurnStarted.serverNowUtcMs, outcome.TurnStarted.timerEndUtcMs);
                     OnTurnStarted?.Invoke(outcome.TurnStarted);
                     if (TurnKitConfig.Instance.enableLogging)
                     {
@@ -585,7 +642,7 @@ namespace TurnKit
 
                     break;
                 case RelayEventType.MoveRequestedForPlayer:
-                    StopTurnTimer();
+                    ApplyTurnTimerFromServer(outcome.MoveRequestedForPlayer.serverNowUtcMs, outcome.MoveRequestedForPlayer.timerEndUtcMs);
                     OnMoveRequestedForPlayer?.Invoke(outcome.MoveRequestedForPlayer);
                     if (TurnKitConfig.Instance.enableLogging)
                     {
@@ -637,11 +694,22 @@ namespace TurnKit
             OnListChanged?.Invoke(list, changeType);
         }
 
-        private static string BuildQueueRequestJson(string slug, Dictionary<string, List<RelayItem>> items)
+        private static string BuildQueueRequestJson(
+            string slug,
+            Dictionary<string, List<RelayItem>> items,
+            FillPolicy fillPolicy,
+            int? delegatedFillAfterSeconds)
         {
             var request = new JSONObject();
             request["slug"] = slug;
             request["items"] = BuildItemsNode(items);
+            request["fillPolicy"] = fillPolicy.ToString();
+
+            if (fillPolicy == FillPolicy.ALLOW_DELEGATED_SLOTS && delegatedFillAfterSeconds.HasValue)
+            {
+                request["delegatedFillAfterSeconds"] = Math.Max(0, delegatedFillAfterSeconds.Value);
+            }
+
             return request.ToString();
         }
 
@@ -853,17 +921,30 @@ namespace TurnKit
             _reconnectTimer = 0f;
         }
 
-        private void StartTurnTimer()
+        private void StartTurnTimer(float durationSeconds)
         {
-            if (_turnTimerDuration <= 0f)
+            if (durationSeconds <= 0f)
             {
                 StopTurnTimer();
                 return;
             }
 
-            _turnTimerRemaining = _turnTimerDuration;
+            _turnTimerDuration = durationSeconds;
+            _turnTimerRemaining = durationSeconds;
             _turnTimerRunning = true;
             OnTurnTimerChanged?.Invoke(_turnTimerRemaining, _turnTimerDuration);
+        }
+
+        private void ApplyTurnTimerFromServer(long serverNowUtcMs, long? timerEndUtcMs)
+        {
+            if (!timerEndUtcMs.HasValue || serverNowUtcMs <= 0L)
+            {
+                StopTurnTimer();
+                return;
+            }
+
+            float durationSeconds = (timerEndUtcMs.Value - serverNowUtcMs) / 1000f;
+            StartTurnTimer(durationSeconds);
         }
 
         private void TickTurnTimer(float deltaTime)
@@ -902,22 +983,7 @@ namespace TurnKit
         {
             _turnTimerRunning = false;
             _turnTimerRemaining = 0f;
-        }
-
-        private void CacheTurnTimerDuration(string slug)
-        {
             _turnTimerDuration = 0f;
-
-            if (TurnKitConfig.Instance?.relayConfigs == null || string.IsNullOrWhiteSpace(slug))
-            {
-                return;
-            }
-
-            var relayConfig = TurnKitConfig.Instance.relayConfigs.FirstOrDefault(relay => relay != null && relay.slug == slug);
-            if (relayConfig != null && relayConfig.turnTimeoutSeconds > 0)
-            {
-                _turnTimerDuration = relayConfig.turnTimeoutSeconds;
-            }
         }
 
         private void DisableReconnect()

@@ -333,6 +333,8 @@ namespace TurnKit.Editor
         {
             relay.lists ??= new List<TurnKitConfig.RelayListConfig>();
             relay.trackedStats ??= new List<TurnKitConfig.TrackedStatConfig>();
+            relay.afkTurnTimerSeconds = Mathf.Max(0, relay.afkTurnTimerSeconds);
+            relay.disconnectedTurnTimerSeconds = Mathf.Max(0, relay.disconnectedTurnTimerSeconds);
         }
 
         private static bool ValidateVotingConfiguration(TurnKitConfig.RelayConfig relay, out string error)

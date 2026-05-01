@@ -72,6 +72,8 @@ namespace TurnKit.Editor
             relay.ignoreAllOwnership = EditorGUILayout.Toggle("Ignore All Ownership", relay.ignoreAllOwnership);
             relay.matchTimeoutMinutes = EditorGUILayout.IntField("Match Timeout (minutes)", relay.matchTimeoutMinutes);
             relay.turnTimeoutSeconds = EditorGUILayout.IntField("Turn Timeout (seconds)", relay.turnTimeoutSeconds);
+            relay.afkTurnTimerSeconds = EditorGUILayout.IntField("AFK Turn Timer (seconds)", relay.afkTurnTimerSeconds);
+            relay.disconnectedTurnTimerSeconds = EditorGUILayout.IntField("Disconnected Turn Timer (seconds)", relay.disconnectedTurnTimerSeconds);
             relay.waitReconnectSeconds = EditorGUILayout.IntField("Wait Reconnect (seconds)", relay.waitReconnectSeconds);
             relay.reconnectMoveHistorySize = EditorGUILayout.IntSlider("Reconnect Move History Size", relay.reconnectMoveHistorySize, 0, 20);
             relay.onTurnTimeout = (TurnKitConfig.OnTurnTimeout)EditorGUILayout.EnumPopup("On Turn Timeout", relay.onTurnTimeout);
@@ -651,6 +653,9 @@ namespace TurnKit.Editor
             {
                 relay.trackedStats = new List<TurnKitConfig.TrackedStatConfig>();
             }
+
+            relay.afkTurnTimerSeconds = Mathf.Max(0, relay.afkTurnTimerSeconds);
+            relay.disconnectedTurnTimerSeconds = Mathf.Max(0, relay.disconnectedTurnTimerSeconds);
         }
     }
 }

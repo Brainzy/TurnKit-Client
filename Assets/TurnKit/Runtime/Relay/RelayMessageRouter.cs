@@ -67,13 +67,19 @@ namespace TurnKit
                 type = node["type"],
                 sessionId = node["sessionId"],
                 players = ParsePlayers(node["players"]),
+                delegatedSlots = ParseIntArray(node["delegatedSlots"]),
                 yourTurn = node["yourTurn"].AsBool,
                 activePlayerId = node["activePlayer"],
+                turnTimerKind = ParseTurnTimerKind(node),
+                turnTimerSeconds = ParseTurnTimerSeconds(node),
+                serverNowUtcMs = ReadOptionalLong(node, "serverNowUtcMs"),
+                timerEndUtcMs = ReadOptionalNullableLong(node, "timerEndUtcMs"),
                 lists = ParseListDefinitions(node["lists"]),
                 contents = ParseListSnapshots(node["contents"]),
                 randomSeed = (long)node["seed"].AsDouble,
                 moveNumber = GetMoveNumber(node)
             };
+            ApplyDelegatedSlots(msg.players, msg.delegatedSlots);
             _state.ApplyMatchStarted(msg);
 
             return new RelayMessageOutcome
@@ -149,7 +155,9 @@ namespace TurnKit
             var msg = new SyncCompleteMessage
             {
                 type = node["type"],
-                moveNumber = GetMoveNumber(node)
+                moveNumber = GetMoveNumber(node),
+                serverNowUtcMs = ReadOptionalLong(node, "serverNowUtcMs"),
+                timerEndUtcMs = ReadOptionalNullableLong(node, "timerEndUtcMs")
             };
             _state.ApplySyncComplete(msg);
 
@@ -167,7 +175,11 @@ namespace TurnKit
             {
                 type = node["type"],
                 activePlayerId = node["activePlayer"],
-                moveNumber = GetMoveNumber(node)
+                turnTimerKind = ParseTurnTimerKind(node),
+                turnTimerSeconds = ParseTurnTimerSeconds(node),
+                moveNumber = GetMoveNumber(node),
+                serverNowUtcMs = ReadOptionalLong(node, "serverNowUtcMs"),
+                timerEndUtcMs = ReadOptionalNullableLong(node, "timerEndUtcMs")
             };
             _state.ApplyTurnStarted(msg);
 
@@ -190,7 +202,9 @@ namespace TurnKit
                 type = node["type"],
                 playerSlot = _state.ResolvePlayerSlot(playerId),
                 updatedLists = updatedLists,
-                moveNumber = moveNumber
+                moveNumber = moveNumber,
+                serverNowUtcMs = ReadOptionalLong(node, "serverNowUtcMs"),
+                timerEndUtcMs = ReadOptionalNullableLong(node, "timerEndUtcMs")
             };
 
             return new RelayMessageOutcome
@@ -299,6 +313,80 @@ namespace TurnKit
             return moveNode?.AsInt ?? 0;
         }
 
+        private static string ParseTurnTimerKind(JSONNode node)
+        {
+            string kind = ReadOptionalString(node, "turnTimerKind");
+            if (!string.IsNullOrWhiteSpace(kind))
+            {
+                return kind;
+            }
+
+            kind = ReadOptionalString(node, "timerKind");
+            if (!string.IsNullOrWhiteSpace(kind))
+            {
+                return kind;
+            }
+
+            return null;
+        }
+
+        private static int ParseTurnTimerSeconds(JSONNode node)
+        {
+            int seconds = ReadOptionalInt(node, "turnTimerSeconds");
+            if (seconds > 0)
+            {
+                return seconds;
+            }
+
+            seconds = ReadOptionalInt(node, "turnTimeoutSeconds");
+            return seconds > 0 ? seconds : 0;
+        }
+
+        private static string ReadOptionalString(JSONNode node, string key)
+        {
+            var valueNode = node?[key];
+            if (valueNode == null || valueNode.IsNull)
+            {
+                return null;
+            }
+
+            string value = valueNode.Value;
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        private static int ReadOptionalInt(JSONNode node, string key)
+        {
+            var valueNode = node?[key];
+            if (valueNode == null || valueNode.IsNull)
+            {
+                return 0;
+            }
+
+            return valueNode.AsInt;
+        }
+
+        private static long ReadOptionalLong(JSONNode node, string key)
+        {
+            var valueNode = node?[key];
+            if (valueNode == null || valueNode.IsNull)
+            {
+                return 0L;
+            }
+
+            return (long)valueNode.AsDouble;
+        }
+
+        private static long? ReadOptionalNullableLong(JSONNode node, string key)
+        {
+            var valueNode = node?[key];
+            if (valueNode == null || valueNode.IsNull)
+            {
+                return null;
+            }
+
+            return (long)valueNode.AsDouble;
+        }
+
         private static ChangeType ParseChangeType(JSONNode node)
         {
             var typeValue = node["kind"]?.Value;
@@ -365,7 +453,9 @@ namespace TurnKit
                 players[i] = new PlayerInfo
                 {
                     playerId = array[i]["playerId"],
-                    slot = (TurnKitConfig.PlayerSlot)array[i]["slot"].AsInt
+                    slot = (TurnKitConfig.PlayerSlot)array[i]["slot"].AsInt,
+                    isConnected = ParseOptionalConnected(array[i]),
+                    isDelegated = ReadOptionalBool(array[i], "delegated")
                 };
             }
 
@@ -415,6 +505,69 @@ namespace TurnKit
             }
 
             return snapshots;
+        }
+
+        private static void ApplyDelegatedSlots(PlayerInfo[] players, int[] delegatedSlots)
+        {
+            if (players == null || players.Length == 0 || delegatedSlots == null || delegatedSlots.Length == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < players.Length; i++)
+            {
+                var player = players[i];
+                if (player == null)
+                {
+                    continue;
+                }
+
+                for (int slotIndex = 0; slotIndex < delegatedSlots.Length; slotIndex++)
+                {
+                    if ((int)player.slot != delegatedSlots[slotIndex])
+                    {
+                        continue;
+                    }
+
+                    player.isDelegated = true;
+                    // Delegated/bot slots should not surface as disconnected in client UI.
+                    player.isConnected = true;
+                    break;
+                }
+            }
+        }
+
+        private static bool ParseOptionalConnected(JSONNode playerNode)
+        {
+            if (TryReadOptionalBool(playerNode, "connected", out bool connected))
+            {
+                return connected;
+            }
+
+            if (TryReadOptionalBool(playerNode, "disconnected", out bool disconnected))
+            {
+                return !disconnected;
+            }
+
+            return true;
+        }
+
+        private static bool ReadOptionalBool(JSONNode node, string key)
+        {
+            return TryReadOptionalBool(node, key, out bool value) && value;
+        }
+
+        private static bool TryReadOptionalBool(JSONNode node, string key, out bool value)
+        {
+            var valueNode = node?[key];
+            if (valueNode == null || valueNode.IsNull)
+            {
+                value = false;
+                return false;
+            }
+
+            value = valueNode.AsBool;
+            return true;
         }
 
         private static PrivateListRevealMessage[] ParsePrivateListReveals(JSONNode node)

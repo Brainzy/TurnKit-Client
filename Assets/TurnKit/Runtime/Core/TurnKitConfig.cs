@@ -76,6 +76,8 @@ namespace TurnKit
             public FailAction failAction = FailAction.SKIP_TURN;
             public int matchTimeoutMinutes = 10;
             public int turnTimeoutSeconds = 60;
+            public int afkTurnTimerSeconds = 0;
+            public int disconnectedTurnTimerSeconds = 0;
             public int waitReconnectSeconds = 45;
             public int reconnectMoveHistorySize = 0;
             public OnTurnTimeout onTurnTimeout = OnTurnTimeout.CHANGE_TO_NEXT_PLAYER;

@@ -264,6 +264,8 @@ namespace TurnKit.Editor
 
                 EditorGUILayout.IntField("Match timeout (minutes)", relay.matchTimeoutMinutes);
                 EditorGUILayout.IntField("Turn timeout (seconds)", relay.turnTimeoutSeconds);
+                EditorGUILayout.IntField("AFK turn timer (seconds)", relay.afkTurnTimerSeconds);
+                EditorGUILayout.IntField("Disconnected turn timer (seconds)", relay.disconnectedTurnTimerSeconds);
                 EditorGUILayout.IntField("Wait reconnect (seconds)", relay.waitReconnectSeconds);
                 EditorGUILayout.IntField("Reconnect move history size", relay.reconnectMoveHistorySize);
                 EditorGUILayout.EnumPopup("On turn timeout", relay.onTurnTimeout);
@@ -493,6 +495,8 @@ namespace TurnKit.Editor
                 failAction = TurnKitConfig.FailAction.SKIP_TURN,
                 matchTimeoutMinutes = 10,
                 turnTimeoutSeconds = 60,
+                afkTurnTimerSeconds = 0,
+                disconnectedTurnTimerSeconds = 0,
                 waitReconnectSeconds = 45,
                 reconnectMoveHistorySize = 0,
                 onTurnTimeout = TurnKitConfig.OnTurnTimeout.CHANGE_TO_NEXT_PLAYER,
@@ -728,6 +732,9 @@ namespace TurnKit.Editor
             {
                 relay.trackedStats = new List<TurnKitConfig.TrackedStatConfig>();
             }
+
+            relay.afkTurnTimerSeconds = Mathf.Max(0, relay.afkTurnTimerSeconds);
+            relay.disconnectedTurnTimerSeconds = Mathf.Max(0, relay.disconnectedTurnTimerSeconds);
         }
     }
 }

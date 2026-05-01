@@ -248,6 +248,25 @@ namespace TurnKit
             return GetPlayerBySlot(slot)?.playerId;
         }
 
+        public bool IsPlayerDelegated(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return false;
+            }
+
+            foreach (var player in _players)
+            {
+                if (player != null &&
+                    string.Equals(player.playerId, playerId, StringComparison.Ordinal))
+                {
+                    return player.isDelegated;
+                }
+            }
+
+            return false;
+        }
+
         public TurnKitConfig.PlayerSlot ResolvePlayerSlot(string playerId)
         {
             if (string.IsNullOrWhiteSpace(playerId))

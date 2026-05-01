@@ -272,8 +272,13 @@ namespace TurnKit
         public string type;
         public string sessionId;
         public PlayerInfo[] players;
+        public int[] delegatedSlots;
         public bool yourTurn;
         public string activePlayerId;
+        public string turnTimerKind;
+        public int turnTimerSeconds;
+        public long serverNowUtcMs;
+        public long? timerEndUtcMs;
         public ListDefinition[] lists;
         public ListSnapshot[] contents;
         public long randomSeed;
@@ -303,6 +308,8 @@ namespace TurnKit
     {
         public string playerId;
         public TurnKitConfig.PlayerSlot slot;
+        public bool isConnected = true;
+        public bool isDelegated;
     }
 
     [Serializable]
@@ -430,6 +437,8 @@ namespace TurnKit
     {
         public string type;
         public int moveNumber;
+        public long serverNowUtcMs;
+        public long? timerEndUtcMs;
     }
 
     [Serializable]
@@ -437,7 +446,11 @@ namespace TurnKit
     {
         public string type;
         public string activePlayerId;
+        public string turnTimerKind;
+        public int turnTimerSeconds;
         public int moveNumber;
+        public long serverNowUtcMs;
+        public long? timerEndUtcMs;
     }
 
     [Serializable]
@@ -447,6 +460,8 @@ namespace TurnKit
         public TurnKitConfig.PlayerSlot playerSlot;
         public IReadOnlyList<RelayList> updatedLists;
         public int moveNumber;
+        public long serverNowUtcMs;
+        public long? timerEndUtcMs;
     }
 
     [Serializable]

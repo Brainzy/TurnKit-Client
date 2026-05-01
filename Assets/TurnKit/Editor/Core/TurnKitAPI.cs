@@ -349,6 +349,8 @@ namespace TurnKit.Editor
                 failAction = ParseNullableEnum(node["failAction"], TurnKitConfig.FailAction.SKIP_TURN),
                 matchTimeoutMinutes = node["matchTimeoutMinutes"].AsInt,
                 turnTimeoutSeconds = node["turnTimeoutSeconds"].AsInt,
+                afkTurnTimerSeconds = node["afkTurnTimerSeconds"].IsNull ? 0 : node["afkTurnTimerSeconds"].AsInt,
+                disconnectedTurnTimerSeconds = node["disconnectedTurnTimerSeconds"].IsNull ? 0 : node["disconnectedTurnTimerSeconds"].AsInt,
                 waitReconnectSeconds = node["waitReconnectSeconds"].AsInt,
                 reconnectMoveHistorySize = node["reconnectMoveHistorySize"].AsInt,
                 onTurnTimeout = ParseNullableEnum(node["onTurnTimeout"], TurnKitConfig.OnTurnTimeout.CHANGE_TO_NEXT_PLAYER),
@@ -564,6 +566,8 @@ namespace TurnKit.Editor
             node["failAction"] = relay.votingEnabled ? relay.failAction.ToString() : JSONNull.CreateOrGet();
             node["matchTimeoutMinutes"] = relay.matchTimeoutMinutes;
             node["turnTimeoutSeconds"] = relay.turnTimeoutSeconds;
+            node["afkTurnTimerSeconds"] = relay.afkTurnTimerSeconds;
+            node["disconnectedTurnTimerSeconds"] = relay.disconnectedTurnTimerSeconds;
             node["waitReconnectSeconds"] = relay.waitReconnectSeconds;
             node["reconnectMoveHistorySize"] = Mathf.Clamp(relay.reconnectMoveHistorySize, 0, 20);
             node["onTurnTimeout"] = relay.onTurnTimeout.ToString();
