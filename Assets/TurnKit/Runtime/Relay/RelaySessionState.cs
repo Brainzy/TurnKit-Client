@@ -134,19 +134,20 @@ namespace TurnKit
             DelegatedMoveRequestedForPlayerId = null;
         }
 
-        public void ApplyMoveRequestedForPlayer(MoveRequestedForPlayerMessage msg, Action<RelayList, ListChangeType> notifyListChanged)
+        public List<RelayList> ApplyMoveRequestedForPlayer(string playerId, PrivateListRevealMessage[] lists, int moveNumber, Action<RelayList, ListChangeType> notifyListChanged)
         {
-            LastAcknowledgedMoveNumber = msg.moveNumber;
+            LastAcknowledgedMoveNumber = moveNumber;
             IsWaitingForDelegatedMove = true;
-            DelegatedMoveRequestedForPlayerId = msg.playerId;
-            ApplyPrivateListRevealPayload(msg?.lists, msg?.moveNumber ?? LastAcknowledgedMoveNumber, notifyListChanged);
+            DelegatedMoveRequestedForPlayerId = playerId;
+            return ApplyPrivateListRevealPayload(lists, moveNumber, notifyListChanged);
         }
 
-        private void ApplyPrivateListRevealPayload(PrivateListRevealMessage[] lists, int moveNumber, Action<RelayList, ListChangeType> notifyListChanged)
+        private List<RelayList> ApplyPrivateListRevealPayload(PrivateListRevealMessage[] lists, int moveNumber, Action<RelayList, ListChangeType> notifyListChanged)
         {
+            var updatedLists = new List<RelayList>();
             if (lists == null)
             {
-                return;
+                return updatedLists;
             }
 
             LastAcknowledgedMoveNumber = moveNumber;
@@ -158,6 +159,7 @@ namespace TurnKit
                 }
 
                 int count = Math.Min(reveal.ids?.Length ?? 0, reveal.slugs?.Length ?? 0);
+                bool patched = false;
                 for (int i = 0; i < count; i++)
                 {
                     var existing = relayList.FindById(reveal.ids[i]);
@@ -168,10 +170,17 @@ namespace TurnKit
 
                     relayList.RemoveItem(existing);
                     relayList.AddItem(new RelayItem(existing.Id, reveal.slugs[i], existing.CreatorSlot));
+                    patched = true;
                 }
 
-                notifyListChanged?.Invoke(relayList, ListChangeType.ItemsMoved);
+                if (patched)
+                {
+                    updatedLists.Add(relayList);
+                    notifyListChanged?.Invoke(relayList, ListChangeType.ItemsMoved);
+                }
             }
+
+            return updatedLists;
         }
 
         public void MarkConnected()
@@ -237,6 +246,24 @@ namespace TurnKit
         public string ResolvePlayerId(TurnKitConfig.PlayerSlot slot)
         {
             return GetPlayerBySlot(slot)?.playerId;
+        }
+
+        public TurnKitConfig.PlayerSlot ResolvePlayerSlot(string playerId)
+        {
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                return default;
+            }
+
+            foreach (var player in _players)
+            {
+                if (player != null && string.Equals(player.playerId, playerId, StringComparison.Ordinal))
+                {
+                    return player.slot;
+                }
+            }
+
+            return default;
         }
 
         public void ApplyStatChanges(IEnumerable<StatChange> changes)

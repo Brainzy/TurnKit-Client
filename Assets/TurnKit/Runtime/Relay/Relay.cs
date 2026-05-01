@@ -589,7 +589,7 @@ namespace TurnKit
                     OnMoveRequestedForPlayer?.Invoke(outcome.MoveRequestedForPlayer);
                     if (TurnKitConfig.Instance.enableLogging)
                     {
-                        Debug.Log($"TurnKit - MoveRequestedForPlayer: {outcome.MoveRequestedForPlayer.playerId}");
+                        Debug.Log($"TurnKit - MoveRequestedForPlayer slot: {outcome.MoveRequestedForPlayer.playerSlot}");
                     }
 
                     break;

@@ -444,13 +444,13 @@ namespace TurnKit
     public class MoveRequestedForPlayerMessage
     {
         public string type;
-        public string playerId;
-        public PrivateListRevealMessage[] lists;
+        public TurnKitConfig.PlayerSlot playerSlot;
+        public IReadOnlyList<RelayList> updatedLists;
         public int moveNumber;
     }
 
     [Serializable]
-    public class PrivateListRevealMessage
+    internal class PrivateListRevealMessage
     {
         public string name;
         public string[] ids;

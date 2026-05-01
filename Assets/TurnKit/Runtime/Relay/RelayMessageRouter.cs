@@ -180,14 +180,18 @@ namespace TurnKit
 
         private RelayMessageOutcome HandleMoveRequestedForPlayer(JSONNode node)
         {
+            string playerId = node["playerId"];
+            var lists = ParsePrivateListReveals(node["lists"]);
+            int moveNumber = GetMoveNumber(node);
+            var updatedLists = _state.ApplyMoveRequestedForPlayer(playerId, lists, moveNumber, _notifyListChanged);
+
             var msg = new MoveRequestedForPlayerMessage
             {
                 type = node["type"],
-                playerId = node["playerId"],
-                lists = ParsePrivateListReveals(node["lists"]),
-                moveNumber = GetMoveNumber(node)
+                playerSlot = _state.ResolvePlayerSlot(playerId),
+                updatedLists = updatedLists,
+                moveNumber = moveNumber
             };
-            _state.ApplyMoveRequestedForPlayer(msg, _notifyListChanged);
 
             return new RelayMessageOutcome
             {
