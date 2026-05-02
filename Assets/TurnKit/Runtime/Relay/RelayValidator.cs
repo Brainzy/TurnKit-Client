@@ -72,7 +72,7 @@ namespace TurnKit
                 return false;
             }
 
-            if (!toList.IsVisibleToMe)
+            if (!toList.IsVisibleToMe && !ignoreOwnership)
             {
                 Debug.LogError($"[TurnKit] Cannot move to '{toList.Name}': List not visible to you.");
                 return false;

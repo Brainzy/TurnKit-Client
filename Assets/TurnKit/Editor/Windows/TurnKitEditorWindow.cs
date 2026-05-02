@@ -617,7 +617,7 @@ namespace TurnKit.Editor
                         EditorPrefs.GetString("TurnKit_SessionToken"),
                         updatedRelay =>
                         {
-                            relay.id = updatedRelay.id;
+                            MergeRelayFromServer(relay, updatedRelay);
                             EditorUtility.SetDirty(config);
                             successCount++;
                             if (successCount == totalCount)
@@ -633,6 +633,68 @@ namespace TurnKit.Editor
                             Debug.LogError($"[TurnKit] Failed to push {relay.slug}: {error}");
                             EditorUtility.DisplayDialog("Push Failed", $"Failed to push {relay.slug}: {error}", "OK");
                         }));
+            }
+        }
+
+        private static void MergeRelayFromServer(TurnKitConfig.RelayConfig localRelay, TurnKitConfig.RelayConfig serverRelay)
+        {
+            if (localRelay == null || serverRelay == null)
+            {
+                return;
+            }
+
+            localRelay.id = serverRelay.id;
+            MergeListsByName(localRelay, serverRelay);
+            MergeTrackedStatsByName(localRelay, serverRelay);
+        }
+
+        private static void MergeListsByName(TurnKitConfig.RelayConfig localRelay, TurnKitConfig.RelayConfig serverRelay)
+        {
+            if (localRelay.lists == null || serverRelay.lists == null)
+            {
+                return;
+            }
+
+            var serverByName = serverRelay.lists
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.name))
+                .ToDictionary(item => item.name, item => item);
+
+            foreach (var local in localRelay.lists)
+            {
+                if (local == null || string.IsNullOrWhiteSpace(local.name))
+                {
+                    continue;
+                }
+
+                if (serverByName.TryGetValue(local.name, out var server))
+                {
+                    local.id = server.id;
+                }
+            }
+        }
+
+        private static void MergeTrackedStatsByName(TurnKitConfig.RelayConfig localRelay, TurnKitConfig.RelayConfig serverRelay)
+        {
+            if (localRelay.trackedStats == null || serverRelay.trackedStats == null)
+            {
+                return;
+            }
+
+            var serverByName = serverRelay.trackedStats
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.name))
+                .ToDictionary(item => item.name, item => item);
+
+            foreach (var local in localRelay.trackedStats)
+            {
+                if (local == null || string.IsNullOrWhiteSpace(local.name))
+                {
+                    continue;
+                }
+
+                if (serverByName.TryGetValue(local.name, out var server))
+                {
+                    local.id = server.id;
+                }
             }
         }
 
