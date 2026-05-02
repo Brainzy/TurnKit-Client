@@ -153,13 +153,9 @@ namespace TurnKit
                 msg["actions"] = actionArray;
             }
 
-            if (delegated)
+            if (delegated && !string.IsNullOrWhiteSpace(delegateForPlayerId))
             {
-                msg["delegated"] = true;
-                if (!string.IsNullOrWhiteSpace(delegateForPlayerId))
-                {
-                    msg["delegateFor"] = delegateForPlayerId;
-                }
+                msg["delegateFor"] = delegateForPlayerId;
             }
 
             return msg.ToString();
