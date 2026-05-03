@@ -58,6 +58,7 @@ namespace TurnKit
         private float _turnTimerRemaining;
         private float _turnTimerDuration;
         private bool _turnTimerRunning;
+        private bool _isAfk;
 
         public static event Action<MatchStartedMessage, IReadOnlyList<RelayList>> OnMatchStarted;
         public static event Action<MoveMadeMessage, IReadOnlyList<RelayList>> OnMoveMade;
@@ -76,6 +77,11 @@ namespace TurnKit
         public static float TurnTimerRemainingSeconds => Instance._turnTimerRemaining;
         public static float TurnTimerDurationSeconds => Instance._turnTimerDuration;
         public static bool IsTurnTimerRunning => Instance._turnTimerRunning;
+        public static bool isAfk
+        {
+            get => Instance._isAfk;
+            set => Instance._isAfk = value;
+        }
 
         private void Awake()
         {
@@ -538,7 +544,7 @@ namespace TurnKit
                 return;
             }
 
-            _transport.Send(_commandQueue.BuildMovePayload(shouldEndTurn, delegated, delegateForPlayerId));
+            _transport.Send(_commandQueue.BuildMovePayload(shouldEndTurn, delegated, delegateForPlayerId, _isAfk));
             _commandQueue.Clear();
         }
 
