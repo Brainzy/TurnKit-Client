@@ -258,7 +258,6 @@ namespace TurnKit
             }
 
             Instance._commandQueue.QueuePassTurn(playerId);
-            Instance.ExecuteQueuedActions(false, false, null);
         }
 
         public static TBuilder Stat<TValue, TBuilder>(MatchStatToken<TValue, TBuilder> token)
@@ -389,51 +388,17 @@ namespace TurnKit
             _state.InitializeFromMetadata(listMetadata, statMetadata);
         }
 
-        public static bool IsReady => Instance._transport.IsConnected && !Instance._state.IsInSyncWindow;
         public static bool IsMyTurn => Instance._state.IsMyTurn;
         public static bool IsWaitingForDelegatedMove => Instance._state.IsWaitingForDelegatedMove;
-        public static string DelegatedMoveRequestedForPlayerId => Instance._state.DelegatedMoveRequestedForPlayerId;
         public static int LastAcknowledgedMoveNumber => Instance._state.LastAcknowledgedMoveNumber;
         public static string MyPlayerId => Instance._myPlayerId;
         public static TurnKitConfig.PlayerSlot MySlot => Instance._mySlot;
         public static string CurrentPlayerId => Instance._state.CurrentTurnPlayerId;
-        public static bool IsCurrentPlayerDelegated => Instance._state.IsPlayerDelegated(Instance._state.CurrentTurnPlayerId);
         public static IReadOnlyList<PlayerInfo> AllPlayers => Instance._state.AllPlayers;
 
         public static PlayerInfo GetPlayerBySlot(TurnKitConfig.PlayerSlot slot)
         {
             return Instance._state.GetPlayerBySlot(slot);
-        }
-
-        public static bool IsPlayerDelegated(string playerId)
-        {
-            return Instance._state.IsPlayerDelegated(playerId);
-        }
-
-        public static void CommitForActiveDelegatedPlayer()
-        {
-            string delegatedPlayerId = Instance._state.CurrentTurnPlayerId;
-            if (!Instance._state.IsPlayerDelegated(delegatedPlayerId))
-            {
-                Debug.LogError("[TurnKit] Active player is not delegated. Delegated move not sent.");
-                Instance._commandQueue.Clear();
-                return;
-            }
-
-            Instance.ExecuteQueuedActions(false, true, delegatedPlayerId);
-        }
-
-        public static void EndTurnForActiveDelegatedPlayer()
-        {
-            string delegatedPlayerId = Instance._state.CurrentTurnPlayerId;
-            if (!Instance._state.IsPlayerDelegated(delegatedPlayerId))
-            {
-                Debug.LogError("[TurnKit] Active player is not delegated. Delegated end turn not sent.");
-                Instance._commandQueue.Clear();
-                return;
-            }
-
-            Instance.ExecuteQueuedActions(true, true, delegatedPlayerId);
         }
 
         internal void EnqueueSpawn(RelayList toList, ItemSpec itemSpec)
