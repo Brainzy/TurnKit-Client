@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text;
 using TurnKit.Internal.SimpleJSON;
 
 namespace TurnKit
@@ -150,7 +151,7 @@ namespace TurnKit
             if (_queuedActions.Count > 0)
             {
                 var actionArray = new JSONArray();
-                foreach (var action in _queuedActions)
+                foreach (var action in BuildSerializedActions())
                 {
                     actionArray.Add(action.ToNode());
                 }
@@ -259,6 +260,131 @@ namespace TurnKit
 
             lastAction.items ??= new List<ItemSpec>();
             return lastAction;
+        }
+
+        private IEnumerable<RelayAction> BuildSerializedActions()
+        {
+            for (int i = 0; i < _queuedActions.Count;)
+            {
+                var action = _queuedActions[i];
+                if (action.action != ActionType.SET_STAT)
+                {
+                    yield return action;
+                    i++;
+                    continue;
+                }
+
+                int blockStart = i;
+                while (i < _queuedActions.Count && _queuedActions[i].action == ActionType.SET_STAT)
+                {
+                    i++;
+                }
+
+                foreach (var batchedAction in BuildBatchedSetStatActions(blockStart, i))
+                {
+                    yield return batchedAction;
+                }
+            }
+        }
+
+        private IEnumerable<RelayAction> BuildBatchedSetStatActions(int startInclusive, int endExclusive)
+        {
+            var matchValues = new Dictionary<string, JSONNode>();
+            var perPlayerValues = new Dictionary<string, Dictionary<string, JSONNode>>();
+
+            for (int index = startInclusive; index < endExclusive; index++)
+            {
+                var action = _queuedActions[index];
+                if (string.IsNullOrWhiteSpace(action.statName))
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(action.playerId))
+                {
+                    matchValues[action.statName] = action.value;
+                    continue;
+                }
+
+                if (!perPlayerValues.TryGetValue(action.playerId, out var statsForPlayer))
+                {
+                    statsForPlayer = new Dictionary<string, JSONNode>();
+                    perPlayerValues[action.playerId] = statsForPlayer;
+                }
+
+                statsForPlayer[action.statName] = action.value;
+            }
+
+            if (matchValues.Count > 0)
+            {
+                yield return new RelayAction
+                {
+                    action = ActionType.SET_STATS,
+                    statValues = matchValues
+                };
+            }
+
+            var playerGroups = new Dictionary<string, List<string>>();
+            var signatureToValues = new Dictionary<string, Dictionary<string, JSONNode>>();
+            foreach (var kvp in perPlayerValues)
+            {
+                string playerId = kvp.Key;
+                var statValues = kvp.Value;
+                if (statValues.Count == 0)
+                {
+                    continue;
+                }
+
+                string signature = BuildStatValueSignature(statValues);
+                if (!playerGroups.TryGetValue(signature, out var players))
+                {
+                    players = new List<string>();
+                    playerGroups[signature] = players;
+                    signatureToValues[signature] = statValues;
+                }
+
+                players.Add(playerId);
+            }
+
+            foreach (var kvp in playerGroups)
+            {
+                var players = kvp.Value;
+                var values = signatureToValues[kvp.Key];
+                if (players.Count == 1)
+                {
+                    yield return new RelayAction
+                    {
+                        action = ActionType.SET_STATS,
+                        playerId = players[0],
+                        statValues = values
+                    };
+                    continue;
+                }
+
+                yield return new RelayAction
+                {
+                    action = ActionType.SET_PLAYER_STATS,
+                    players = players,
+                    statValues = values
+                };
+            }
+        }
+
+        private static string BuildStatValueSignature(Dictionary<string, JSONNode> statValues)
+        {
+            var keys = new List<string>(statValues.Keys);
+            keys.Sort(System.StringComparer.Ordinal);
+
+            var builder = new StringBuilder();
+            foreach (var key in keys)
+            {
+                builder.Append(key);
+                builder.Append(':');
+                builder.Append(statValues[key]?.ToString() ?? "null");
+                builder.Append(';');
+            }
+
+            return builder.ToString();
         }
     }
 }

@@ -50,6 +50,7 @@ namespace TurnKit
         public IReadOnlyList<RelayList> AllLists => _allLists.AsReadOnly();
         public IReadOnlyList<PlayerInfo> AllPlayers => _players.Count == 0 ? null : _players.AsReadOnly();
         public string CurrentTurnPlayerId { get; private set; }
+        public TurnKitConfig.PlayerSlot CurrentTurnSlot => ResolvePlayerSlot(CurrentTurnPlayerId);
         public bool IsMyTurn { get; private set; }
         public bool IsInSyncWindow { get; private set; }
         public int LastAcknowledgedMoveNumber { get; private set; }

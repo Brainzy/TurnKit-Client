@@ -12,6 +12,8 @@ namespace TurnKit
         SHUFFLE,
         PASS_TURN,
         SET_STAT,
+        SET_STATS,
+        SET_PLAYER_STATS,
         ADD_STAT
     }
 
@@ -98,7 +100,9 @@ namespace TurnKit
         public string list;
         public string statName;
         public string playerId;
+        public List<string> players;
         public JSONNode value;
+        public Dictionary<string, JSONNode> statValues;
         public double? delta;
         public string[] values;
 
@@ -184,6 +188,32 @@ namespace TurnKit
                     node["value"] = value ?? JSONNull.CreateOrGet();
                     break;
 
+                case ActionType.SET_STATS:
+                    if (!string.IsNullOrEmpty(playerId))
+                    {
+                        node["player"] = playerId;
+                    }
+
+                    node["values"] = SerializeStatValuesObject();
+                    break;
+
+                case ActionType.SET_PLAYER_STATS:
+                    var playersArray = new JSONArray();
+                    if (players != null)
+                    {
+                        foreach (var player in players)
+                        {
+                            if (!string.IsNullOrWhiteSpace(player))
+                            {
+                                playersArray.Add(player);
+                            }
+                        }
+                    }
+
+                    node["players"] = playersArray;
+                    node["values"] = SerializeStatValuesObject();
+                    break;
+
                 case ActionType.ADD_STAT:
                     node["stat"] = statName;
                     if (!string.IsNullOrEmpty(playerId))
@@ -263,6 +293,22 @@ namespace TurnKit
             }
 
             return true;
+        }
+
+        private JSONObject SerializeStatValuesObject()
+        {
+            var valuesObject = new JSONObject();
+            if (statValues == null)
+            {
+                return valuesObject;
+            }
+
+            foreach (var kvp in statValues)
+            {
+                valuesObject[kvp.Key] = kvp.Value ?? JSONNull.CreateOrGet();
+            }
+
+            return valuesObject;
         }
     }
 

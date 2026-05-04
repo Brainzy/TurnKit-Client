@@ -397,6 +397,7 @@ namespace TurnKit
         public static string MyPlayerId => Instance._myPlayerId;
         public static TurnKitConfig.PlayerSlot MySlot => Instance._mySlot;
         public static string CurrentPlayerId => Instance._state.CurrentTurnPlayerId;
+        public static TurnKitConfig.PlayerSlot CurrentTurnSlot => Instance._state.CurrentTurnSlot;
         public static IReadOnlyList<PlayerInfo> AllPlayers => Instance._state.AllPlayers;
 
         public static PlayerInfo GetPlayerBySlot(TurnKitConfig.PlayerSlot slot)
