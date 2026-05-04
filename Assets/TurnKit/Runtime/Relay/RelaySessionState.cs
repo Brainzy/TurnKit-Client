@@ -150,7 +150,6 @@ namespace TurnKit
                 return updatedLists;
             }
 
-            LastAcknowledgedMoveNumber = moveNumber;
             foreach (var reveal in lists)
             {
                 if (reveal == null || string.IsNullOrWhiteSpace(reveal.name) || !_listsByName.TryGetValue(reveal.name, out var relayList))

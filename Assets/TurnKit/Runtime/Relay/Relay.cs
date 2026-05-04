@@ -59,6 +59,7 @@ namespace TurnKit
         private float _turnTimerDuration;
         private bool _turnTimerRunning;
         private bool _isAfk;
+        private int _localDelegatedPendingMoves;
 
         public static event Action<MatchStartedMessage, IReadOnlyList<RelayList>> OnMatchStarted;
         public static event Action<MoveMadeMessage, IReadOnlyList<RelayList>> OnMoveMade;
@@ -158,6 +159,7 @@ namespace TurnKit
                 Instance._allowReconnect = true;
                 Instance.ResetReconnectBackoff();
                 Instance.ResetTurnTimer();
+                Instance.ResetDelegatedIntendedMoveTracking();
 
                 await Instance._transport.Connect(Instance._relayToken, Instance._state.LastAcknowledgedMoveNumber);
                 return true;
@@ -203,6 +205,7 @@ namespace TurnKit
             Instance._allowReconnect = true;
             Instance.ResetReconnectBackoff();
             Instance.ResetTurnTimer();
+            Instance.ResetDelegatedIntendedMoveTracking();
 
             return await Instance.ResumeInternal(relayToken, lastMoveNumber);
         }
@@ -509,8 +512,29 @@ namespace TurnKit
                 return;
             }
 
-            _transport.Send(_commandQueue.BuildMovePayload(shouldEndTurn, delegated, delegateForPlayerId, _isAfk));
+            int? intendedMoveNumber = delegated
+                ? GetAndAdvanceDelegatedIntendedMoveNumber()
+                : (int?)null;
+
+            _transport.Send(_commandQueue.BuildMovePayload(
+                shouldEndTurn,
+                delegated,
+                delegateForPlayerId,
+                _isAfk,
+                intendedMoveNumber));
             _commandQueue.Clear();
+        }
+
+        private int GetAndAdvanceDelegatedIntendedMoveNumber()
+        {
+            int intended = _state.LastAcknowledgedMoveNumber + _localDelegatedPendingMoves + 1;
+            _localDelegatedPendingMoves++;
+            return intended;
+        }
+
+        private void ResetDelegatedIntendedMoveTracking()
+        {
+            _localDelegatedPendingMoves = 0;
         }
 
         private void Update()
@@ -560,6 +584,8 @@ namespace TurnKit
             {
                 return;
             }
+
+            _localDelegatedPendingMoves = 0;
 
             switch (outcome.EventType)
             {

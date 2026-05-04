@@ -127,7 +127,12 @@ namespace TurnKit
             });
         }
 
-        public string BuildMovePayload(bool shouldEndTurn, bool delegated = false, string delegateForPlayerId = null, bool isAfk = false)
+        public string BuildMovePayload(
+            bool shouldEndTurn,
+            bool delegated = false,
+            string delegateForPlayerId = null,
+            bool isAfk = false,
+            int? intendedMoveNumber = null)
         {
             ExecutePendingBuilders();
 
@@ -156,6 +161,11 @@ namespace TurnKit
             if (delegated && !string.IsNullOrWhiteSpace(delegateForPlayerId))
             {
                 msg["delegateFor"] = delegateForPlayerId;
+            }
+
+            if (intendedMoveNumber.HasValue)
+            {
+                msg["intendedMoveNumber"] = intendedMoveNumber.Value;
             }
 
             if (isAfk)
