@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using TurnKit.Internal.SimpleJSON;
 using UnityEngine;
 
@@ -15,12 +16,15 @@ namespace TurnKit
 
     public class Relay : MonoBehaviour
     {
+        private const string InstallIdPrefsKey = "TK.I";
+        private const string ReconnectPrefix = "TK.R.";
         private const bool AutoReconnectEnabled = true;
         private const int AutoReconnectMaxAttempts = 5;
         private const float AutoReconnectInitialDelaySeconds = 1f;
         private const float AutoReconnectMaxDelaySeconds = 8f;
 
         private static Relay _instance;
+        private static string _installId;
 
         public static Relay Instance
         {
@@ -45,6 +49,7 @@ namespace TurnKit
         private RelayTransport _transport;
         private RelayMessageRouter _messageRouter;
         private string _relayToken;
+        private string _relaySlug;
         private string _sessionId;
         private string _myPlayerId;
         private TurnKitConfig.PlayerSlot _mySlot;
@@ -86,6 +91,7 @@ namespace TurnKit
 
         private void Awake()
         {
+            _ = GetOrCreateInstallId();
             _commandQueue = new RelayCommandQueue(_validator);
             _transport = new RelayTransport(HandleConnected, HandleDisconnected, HandleTransportError, HandleIncomingMessage);
             _messageRouter = new RelayMessageRouter(_state, DispatchListChanged);
@@ -151,6 +157,7 @@ namespace TurnKit
             {
                 var response = await TurnKitClientRequest.SendJson<QueueResponse>(req);
                 Instance._relayToken = response.relayToken;
+                Instance._relaySlug = slug;
                 Instance._sessionId = response.sessionId;
                 Instance._mySlot = (TurnKitConfig.PlayerSlot)response.slot;
                 Instance._myPlayerId = identity.PlayerId;
@@ -162,6 +169,7 @@ namespace TurnKit
                 Instance.ResetDelegatedIntendedMoveTracking();
 
                 await Instance._transport.Connect(Instance._relayToken, Instance._state.LastAcknowledgedMoveNumber);
+                SaveLastMatchReconnect(identity.PlayerId, slug, Instance._relayToken, Instance._state.LastAcknowledgedMoveNumber);
                 return true;
             }
             catch (Exception ex)
@@ -199,6 +207,7 @@ namespace TurnKit
             }
 
             Instance._relayToken = relayToken;
+            Instance._relaySlug = slug;
             Instance._myPlayerId = playerId;
             Instance._state.SetLocalPlayer(playerId);
             Instance._sessionTerminated = false;
@@ -207,7 +216,43 @@ namespace TurnKit
             Instance.ResetTurnTimer();
             Instance.ResetDelegatedIntendedMoveTracking();
 
-            return await Instance.ResumeInternal(relayToken, lastMoveNumber);
+            bool resumed = await Instance.ResumeInternal(relayToken, lastMoveNumber);
+            if (resumed)
+            {
+                SaveLastMatchReconnect(playerId, slug, relayToken, Instance._state.LastAcknowledgedMoveNumber);
+            }
+
+            return resumed;
+        }
+
+        public static async Task<bool> ResumeLastMatch()
+        {
+            string playerId = PlayerPrefs.GetString(GetReconnectKey("P"), null);
+            string slug = PlayerPrefs.GetString(GetReconnectKey("S"), null);
+            string relayToken = PlayerPrefs.GetString(GetReconnectKey("T"), null);
+            int lastMoveNumber = Mathf.Max(0, PlayerPrefs.GetInt(GetReconnectKey("M"), 0));
+
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(slug) || string.IsNullOrWhiteSpace(relayToken))
+            {
+                return false;
+            }
+
+            bool success = await Resume(playerId, slug, relayToken, lastMoveNumber);
+            if (!success)
+            {
+                ClearSavedReconnect();
+            }
+
+            return success;
+        }
+
+        public static void ClearSavedReconnect()
+        {
+            PlayerPrefs.DeleteKey(GetReconnectKey("P"));
+            PlayerPrefs.DeleteKey(GetReconnectKey("S"));
+            PlayerPrefs.DeleteKey(GetReconnectKey("T"));
+            PlayerPrefs.DeleteKey(GetReconnectKey("M"));
+            PlayerPrefs.Save();
         }
 
         public static void SendJson(string json)
@@ -215,40 +260,40 @@ namespace TurnKit
             Instance._commandQueue.QueueJson(json);
         }
 
-        public static void Commit()
+        public static Task Commit()
         {
-            Instance.ExecuteQueuedActions(false, false, null);
+            return Instance.ExecuteQueuedActionsAndWait(false, false, null);
         }
 
-        public static void EndMyTurn()
+        public static Task EndMyTurn()
         {
-            Instance.ExecuteQueuedActions(true, false, null);
+            return Instance.ExecuteQueuedActionsAndWait(true, false, null);
         }
 
-        public static void CommitForPlayer(TurnKitConfig.PlayerSlot slot)
+        public static Task CommitForPlayer(TurnKitConfig.PlayerSlot slot)
         {
             string playerId = Instance.ResolvePlayerId(slot);
             if (string.IsNullOrWhiteSpace(playerId))
             {
                 Debug.LogError($"[TurnKit] Cannot commit delegated move to slot {slot}: no player is assigned to that slot.");
                 Instance._commandQueue.Clear();
-                return;
+                return Task.CompletedTask;
             }
 
-            Instance.ExecuteQueuedActions(false, true, playerId);
+            return Instance.ExecuteQueuedActionsAndWait(false, true, playerId);
         }
 
-        public static void EndTurnForPlayer(TurnKitConfig.PlayerSlot slot)
+        public static Task EndTurnForPlayer(TurnKitConfig.PlayerSlot slot)
         {
             string playerId = Instance.ResolvePlayerId(slot);
             if (string.IsNullOrWhiteSpace(playerId))
             {
                 Debug.LogError($"[TurnKit] Cannot end delegated turn for slot {slot}: no player is assigned to that slot.");
                 Instance._commandQueue.Clear();
-                return;
+                return Task.CompletedTask;
             }
 
-            Instance.ExecuteQueuedActions(true, true, playerId);
+            return Instance.ExecuteQueuedActionsAndWait(true, true, playerId);
         }
 
         public static void PassTurnTo(TurnKitConfig.PlayerSlot slot)
@@ -377,6 +422,7 @@ namespace TurnKit
                 _instance.DisableReconnect();
                 await _instance._transport.Close();
             }
+            ClearSavedReconnect();
 
             using var req = TurnKitClientRequest.Create($"/v1/client/relay/queue/{slug}", "DELETE");
             await TurnKitClientRequest.PrepareIdentity(req, identity);
@@ -502,7 +548,25 @@ namespace TurnKit
             throw new InvalidOperationException($"[TurnKit] Stat '{metadata.Name}' does not map to builder type '{typeof(TBuilder).Name}'.");
         }
 
-        private void ExecuteQueuedActions(bool shouldEndTurn, bool delegated, string delegateForPlayerId)
+        private async Task ExecuteQueuedActionsAndWait(bool shouldEndTurn, bool delegated, string delegateForPlayerId)
+        {
+            int? expectedMoveNumber = ExecuteQueuedActions(shouldEndTurn, delegated, delegateForPlayerId);
+            if (!expectedMoveNumber.HasValue)
+            {
+                return;
+            }
+
+            try
+            {
+                await WaitForMoveApplied(expectedMoveNumber.Value);
+            }
+            catch (TaskCanceledException)
+            {
+                Debug.LogWarning($"[TurnKit] Awaited move #{expectedMoveNumber.Value} was not confirmed before disconnect/error/timeout.");
+            }
+        }
+
+        private int? ExecuteQueuedActions(bool shouldEndTurn, bool delegated, string delegateForPlayerId)
         {
             _validator.ValidateReadyToSend(_transport.IsConnected, _state.IsInSyncWindow);
 
@@ -510,9 +574,10 @@ namespace TurnKit
             {
                 Debug.LogError("[TurnKit] Not your turn. Actions not sent.");
                 _commandQueue.Clear();
-                return;
+                return null;
             }
 
+            int expectedMoveNumber = _state.LastAcknowledgedMoveNumber + 1;
             int? intendedMoveNumber = delegated
                 ? GetAndAdvanceDelegatedIntendedMoveNumber()
                 : (int?)null;
@@ -524,6 +589,71 @@ namespace TurnKit
                 _isAfk,
                 intendedMoveNumber));
             _commandQueue.Clear();
+            return expectedMoveNumber;
+        }
+
+        private Task WaitForMoveApplied(int expectedMoveNumber)
+        {
+            if (_state.LastAcknowledgedMoveNumber >= expectedMoveNumber)
+            {
+                return Task.CompletedTask;
+            }
+
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            CancellationTokenSource timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+
+            Action<MoveMadeMessage, IReadOnlyList<RelayList>> onMoveMade = null;
+            Action<ErrorMessage> onError = null;
+            Action onDisconnected = null;
+
+            void Cleanup()
+            {
+                OnMoveMade -= onMoveMade;
+                OnError -= onError;
+                OnDisconnected -= onDisconnected;
+                timeoutCts.Dispose();
+            }
+
+            onMoveMade = (msg, _) =>
+            {
+                if (msg == null || msg.moveNumber < expectedMoveNumber)
+                {
+                    return;
+                }
+
+                Cleanup();
+                tcs.TrySetResult(true);
+            };
+
+            onError = _ =>
+            {
+                Cleanup();
+                tcs.TrySetCanceled();
+            };
+
+            onDisconnected = () =>
+            {
+                Cleanup();
+                tcs.TrySetCanceled();
+            };
+
+            timeoutCts.Token.Register(() =>
+            {
+                Cleanup();
+                tcs.TrySetCanceled();
+            });
+
+            OnMoveMade += onMoveMade;
+            OnError += onError;
+            OnDisconnected += onDisconnected;
+
+            if (_state.LastAcknowledgedMoveNumber >= expectedMoveNumber)
+            {
+                Cleanup();
+                tcs.TrySetResult(true);
+            }
+
+            return tcs.Task;
         }
 
         private int GetAndAdvanceDelegatedIntendedMoveNumber()
@@ -615,6 +745,7 @@ namespace TurnKit
                     break;
                 case RelayEventType.MoveMade:
                     OnMoveMade?.Invoke(outcome.MoveMade, _state.AllLists);
+                    SaveLastMatchReconnectFromCurrentState();
                     if (TurnKitConfig.Instance.enableLogging)
                     {
                         Debug.Log($"TurnKit - MoveMade #{outcome.MoveMade.moveNumber} from {outcome.MoveMade.actingPlayerId}");
@@ -624,6 +755,7 @@ namespace TurnKit
                 case RelayEventType.SyncComplete:
                     ApplyTurnTimerFromServer(outcome.SyncComplete.serverNowUtcMs, outcome.SyncComplete.timerEndUtcMs);
                     OnSyncComplete?.Invoke();
+                    SaveLastMatchReconnectFromCurrentState();
                     if (TurnKitConfig.Instance.enableLogging)
                     {
                         Debug.Log($"TurnKit - Sync complete (move: {outcome.SyncComplete.moveNumber})");
@@ -661,6 +793,7 @@ namespace TurnKit
                     if (IsReconnectTerminalError(outcome.Error))
                     {
                         DisableReconnect();
+                        ClearSavedReconnect();
                         OnReconnectFailed?.Invoke(outcome.Error);
                     }
                     else if (ShouldReconnectOnError(outcome.Error))
@@ -677,6 +810,7 @@ namespace TurnKit
                     OnGameEnded?.Invoke(outcome.GameEnded);
                     StopTurnTimer();
                     DisableReconnect();
+                    ClearSavedReconnect();
                     _transport.MarkDisconnected();
                     _state.MarkDisconnected();
                     if (TurnKitConfig.Instance.enableLogging)
@@ -1031,6 +1165,67 @@ namespace TurnKit
             public string relayToken;
             public string sessionId;
             public int slot;
+        }
+
+        private static void SaveLastMatchReconnect(string playerId, string slug, string relayToken, int lastMoveNumber)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(slug) || string.IsNullOrWhiteSpace(relayToken))
+            {
+                return;
+            }
+
+            PlayerPrefs.SetString(GetReconnectKey("P"), playerId);
+            PlayerPrefs.SetString(GetReconnectKey("S"), slug);
+            PlayerPrefs.SetString(GetReconnectKey("T"), relayToken);
+            PlayerPrefs.SetInt(GetReconnectKey("M"), Mathf.Max(0, lastMoveNumber));
+            PlayerPrefs.Save();
+        }
+
+        private static void SaveLastMatchReconnectFromCurrentState()
+        {
+            if (_instance == null)
+            {
+                return;
+            }
+
+            SaveLastMatchReconnect(
+                _instance._myPlayerId,
+                _instance._relaySlug,
+                _instance._relayToken,
+                _instance._state.LastAcknowledgedMoveNumber);
+        }
+
+        private static string GetReconnectKey(string suffix)
+        {
+            return $"{ReconnectPrefix}{GetOrCreateInstallId()}.{suffix}";
+        }
+
+        private static string GetOrCreateInstallId()
+        {
+            if (!string.IsNullOrWhiteSpace(_installId))
+            {
+                return _installId;
+            }
+
+            string existing = PlayerPrefs.GetString(InstallIdPrefsKey, null);
+            if (!string.IsNullOrWhiteSpace(existing))
+            {
+                _installId = existing;
+                return _installId;
+            }
+
+            const string chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+            var random = new System.Random();
+            var value = new char[12];
+            for (int i = 0; i < value.Length; i++)
+            {
+                value[i] = chars[random.Next(chars.Length)];
+            }
+
+            _installId = new string(value);
+            PlayerPrefs.SetString(InstallIdPrefsKey, _installId);
+            PlayerPrefs.Save();
+            return _installId;
         }
     }
 }
