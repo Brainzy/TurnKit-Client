@@ -25,6 +25,7 @@ namespace TurnKit
 
         private static Relay _instance;
         private static string _installId;
+        private static string _prefsScope;
 
         public static Relay Instance
         {
@@ -1197,7 +1198,26 @@ namespace TurnKit
 
         private static string GetReconnectKey(string suffix)
         {
-            return $"{ReconnectPrefix}{GetOrCreateInstallId()}.{suffix}";
+            return $"{ReconnectPrefix}{ResolvePrefsScope()}.{suffix}";
+        }
+
+        private static string ResolvePrefsScope()
+        {
+            if (!string.IsNullOrWhiteSpace(_prefsScope))
+            {
+                return _prefsScope;
+            }
+
+#if UNITY_EDITOR
+            _prefsScope = Hash8(Application.dataPath);
+            return _prefsScope;
+#elif UNITY_WEBGL
+            _prefsScope = Hash8(Application.absoluteURL);
+            return _prefsScope;
+#else
+            _prefsScope = GetOrCreateInstallId();
+            return _prefsScope;
+#endif
         }
 
         private static string GetOrCreateInstallId()
@@ -1226,6 +1246,13 @@ namespace TurnKit
             PlayerPrefs.SetString(InstallIdPrefsKey, _installId);
             PlayerPrefs.Save();
             return _installId;
+        }
+
+        private static string Hash8(string value)
+        {
+            string source = string.IsNullOrWhiteSpace(value) ? "main" : value;
+            string hash = Hash128.Compute(source).ToString();
+            return hash.Length <= 8 ? hash : hash.Substring(0, 8);
         }
     }
 }
