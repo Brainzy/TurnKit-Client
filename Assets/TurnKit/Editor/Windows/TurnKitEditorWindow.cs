@@ -12,6 +12,10 @@ namespace TurnKit.Editor
         private readonly Dictionary<string, bool> configFoldouts = new();
         private readonly Dictionary<string, bool> webhookFoldouts = new();
         private List<TurnKitConfig.WebhookConfig> webhooks = new();
+        private string newPlayerStoreKey = string.Empty;
+        private TurnKitConfig.PlayerStoreValueType newPlayerStoreValueType = TurnKitConfig.PlayerStoreValueType.STRING;
+        private bool newPlayerStoreClientWritable = true;
+        private bool newPlayerStoreClientReadable = true;
 
         [MenuItem("Tools/TurnKit/Configuration", priority = 1)]
         public static void ShowWindow()
@@ -25,6 +29,7 @@ namespace TurnKit.Editor
         {
             LoadConfig();
             LoadWebhooks();
+            LoadPlayerStoreDefs();
         }
 
         private void LoadConfig()
@@ -62,6 +67,8 @@ namespace TurnKit.Editor
             DrawLeaderboards();
             GUILayout.Space(10);
             DrawRelayConfigs();
+            GUILayout.Space(10);
+            DrawPlayerStoreDefs();
             GUILayout.Space(10);
             DrawWebhooks();
             GUILayout.Space(10);
@@ -297,6 +304,9 @@ namespace TurnKit.Editor
                 }
 
                 GUILayout.Space(4);
+                EditorGUILayout.LabelField($"Queue Requirements ({relay.queueRequirements.Count})", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField($"Player Store Mutations ({relay.playerStoreMutations.Count})", EditorStyles.boldLabel);
+                GUILayout.Space(4);
                 EditorGUILayout.LabelField($"Tracked Stats ({relay.trackedStats.Count})", EditorStyles.boldLabel);
                 if (relay.trackedStats.Count == 0)
                 {
@@ -355,6 +365,77 @@ namespace TurnKit.Editor
                     GUILayout.Space(5);
                 }
             }
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawPlayerStoreDefs()
+        {
+            config.playerStoreDefs ??= new List<TurnKitConfig.PlayerStoreDefConfig>();
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField($"Player Store Defs ({config.playerStoreDefs.Count})", EditorStyles.boldLabel);
+            GUILayout.FlexibleSpace();
+            EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
+            if (GUILayout.Button("Refresh", GUILayout.Width(70)))
+            {
+                LoadPlayerStoreDefs();
+            }
+            EditorGUI.EndDisabledGroup();
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(5);
+            EditorGUILayout.LabelField("Create New", EditorStyles.miniBoldLabel);
+            newPlayerStoreKey = EditorGUILayout.TextField("Store Key", newPlayerStoreKey);
+            newPlayerStoreValueType = (TurnKitConfig.PlayerStoreValueType)EditorGUILayout.EnumPopup("Value Type", newPlayerStoreValueType);
+            newPlayerStoreClientWritable = EditorGUILayout.Toggle("Client Writable", newPlayerStoreClientWritable);
+            newPlayerStoreClientReadable = EditorGUILayout.Toggle("Client Readable", newPlayerStoreClientReadable);
+
+            EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
+            if (GUILayout.Button("Create", GUILayout.Width(80)))
+            {
+                CreatePlayerStoreDef();
+            }
+            EditorGUI.EndDisabledGroup();
+
+            GUILayout.Space(6);
+            if (config.playerStoreDefs.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No player store defs loaded.", MessageType.Info);
+            }
+            else
+            {
+                foreach (var def in config.playerStoreDefs.ToList())
+                {
+                    DrawPlayerStoreDef(def);
+                    GUILayout.Space(4);
+                }
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawPlayerStoreDef(TurnKitConfig.PlayerStoreDefConfig def)
+        {
+            if (def == null)
+            {
+                return;
+            }
+
+            EditorGUILayout.BeginVertical(GUI.skin.box);
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField(def.storeKey, EditorStyles.boldLabel);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Delete", GUILayout.Width(60)))
+            {
+                DeletePlayerStoreDef(def);
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUI.BeginDisabledGroup(true);
+            EditorGUILayout.EnumPopup("Value Type", def.valueType);
+            EditorGUILayout.Toggle("Client Writable", def.clientWritable);
+            EditorGUILayout.Toggle("Client Readable", def.clientReadable);
+            EditorGUI.EndDisabledGroup();
             EditorGUILayout.EndVertical();
         }
 
@@ -460,7 +541,8 @@ namespace TurnKit.Editor
             var codegenHeaderStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 12 };
             EditorGUILayout.LabelField("Code Generation", codegenHeaderStyle);
             GUILayout.Space(5);
-            EditorGUI.BeginDisabledGroup(config.relayConfigs.Count == 0);
+            bool hasCodegenSources = config.relayConfigs.Count > 0 || (config.playerStoreDefs?.Count ?? 0) > 0;
+            EditorGUI.BeginDisabledGroup(!hasCodegenSources);
             bool hasEnumChanges = EnumGenerator.HasChanges(config);
             string buttonLabel = hasEnumChanges ? "Generate Enums (Out of Sync)" : "Generate Enums";
             if (GUILayout.Button(buttonLabel, GUILayout.Height(30)))
@@ -470,9 +552,9 @@ namespace TurnKit.Editor
             }
             EditorGUI.EndDisabledGroup();
 
-            if (config.relayConfigs.Count == 0)
+            if (!hasCodegenSources)
             {
-                EditorGUILayout.HelpBox("Add relay configs to generate enums", MessageType.Info);
+                EditorGUILayout.HelpBox("Add relay configs or player store defs to generate enums", MessageType.Info);
             }
             else if (hasEnumChanges)
             {
@@ -503,7 +585,9 @@ namespace TurnKit.Editor
                 revealPrivateListsOnTimeout = false,
                 ignoreAllOwnership = false,
                 lists = new List<TurnKitConfig.RelayListConfig>(),
-                trackedStats = new List<TurnKitConfig.TrackedStatConfig>()
+                trackedStats = new List<TurnKitConfig.TrackedStatConfig>(),
+                queueRequirements = new List<TurnKitConfig.QueueRequirementConfig>(),
+                playerStoreMutations = new List<TurnKitConfig.PlayerStoreMutationConfig>()
             };
 
             config.relayConfigs.Add(newConfig);
@@ -591,6 +675,7 @@ namespace TurnKit.Editor
                         EditorUtility.SetDirty(config);
                         AssetDatabase.SaveAssets();
                         EnumGenerator.Generate(config);
+                        LoadPlayerStoreDefs();
                         LoadWebhooks();
                         Debug.Log($"[TurnKit] Pulled {configs.Count} relay config(s)");
                         EditorUtility.DisplayDialog("Success", $"Pulled {configs.Count} relay config(s) from server", "OK");
@@ -717,6 +802,86 @@ namespace TurnKit.Editor
                     error => Debug.LogWarning($"[TurnKit] Failed to load webhooks: {error}")));
         }
 
+        private void LoadPlayerStoreDefs()
+        {
+            if (config == null || string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId))
+            {
+                return;
+            }
+
+            EditorCoroutineRunner.StartCoroutine(
+                TurnKitAPI.FetchPlayerStoreDefs(
+                    config.gameKeyId,
+                    EditorPrefs.GetString("TurnKit_SessionToken"),
+                    loaded =>
+                    {
+                        config.playerStoreDefs = loaded ?? new List<TurnKitConfig.PlayerStoreDefConfig>();
+                        EditorUtility.SetDirty(config);
+                        AssetDatabase.SaveAssets();
+                        EnumGenerator.Generate(config);
+                        Repaint();
+                    },
+                    error => Debug.LogWarning($"[TurnKit] Failed to load player store defs: {error}")));
+        }
+
+        private void CreatePlayerStoreDef()
+        {
+            var def = new TurnKitConfig.PlayerStoreDefConfig
+            {
+                storeKey = newPlayerStoreKey?.Trim(),
+                valueType = newPlayerStoreValueType,
+                clientWritable = newPlayerStoreClientWritable,
+                clientReadable = newPlayerStoreClientReadable
+            };
+
+            if (!TurnKitConfigValidator.TryValidatePlayerStoreDef(config, def, out var error))
+            {
+                EditorUtility.DisplayDialog("Player Store Def Invalid", error, "OK");
+                return;
+            }
+
+            EditorCoroutineRunner.StartCoroutine(
+                TurnKitAPI.CreatePlayerStoreDef(
+                    config.gameKeyId,
+                    def,
+                    EditorPrefs.GetString("TurnKit_SessionToken"),
+                    _ =>
+                    {
+                        newPlayerStoreKey = string.Empty;
+                        LoadPlayerStoreDefs();
+                    },
+                    err =>
+                    {
+                        Debug.LogError($"[TurnKit] Failed to create player store def: {err}");
+                        EditorUtility.DisplayDialog("Create Failed", err, "OK");
+                    }));
+        }
+
+        private void DeletePlayerStoreDef(TurnKitConfig.PlayerStoreDefConfig def)
+        {
+            if (def == null || string.IsNullOrWhiteSpace(def.storeKey))
+            {
+                return;
+            }
+
+            if (!EditorUtility.DisplayDialog("Delete Player Store Def", $"Delete '{def.storeKey}'?", "Delete", "Cancel"))
+            {
+                return;
+            }
+
+            EditorCoroutineRunner.StartCoroutine(
+                TurnKitAPI.DeletePlayerStoreDef(
+                    config.gameKeyId,
+                    def.storeKey,
+                    EditorPrefs.GetString("TurnKit_SessionToken"),
+                    LoadPlayerStoreDefs,
+                    err =>
+                    {
+                        Debug.LogError($"[TurnKit] Failed to delete player store def: {err}");
+                        EditorUtility.DisplayDialog("Delete Failed", err, "OK");
+                    }));
+        }
+
         private void SaveWebhook(TurnKitConfig.WebhookConfig webhook)
         {
             if (string.IsNullOrWhiteSpace(webhook.id) || string.IsNullOrWhiteSpace(webhook.url))
@@ -793,6 +958,16 @@ namespace TurnKit.Editor
             if (relay.trackedStats == null)
             {
                 relay.trackedStats = new List<TurnKitConfig.TrackedStatConfig>();
+            }
+
+            if (relay.queueRequirements == null)
+            {
+                relay.queueRequirements = new List<TurnKitConfig.QueueRequirementConfig>();
+            }
+
+            if (relay.playerStoreMutations == null)
+            {
+                relay.playerStoreMutations = new List<TurnKitConfig.PlayerStoreMutationConfig>();
             }
 
             relay.afkTurnTimerSeconds = Mathf.Max(0, relay.afkTurnTimerSeconds);

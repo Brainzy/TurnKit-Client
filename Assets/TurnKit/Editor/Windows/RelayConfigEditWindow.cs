@@ -47,6 +47,10 @@ namespace TurnKit.Editor
             GUILayout.Space(8);
             DrawTrackedStats();
             GUILayout.Space(15);
+            DrawQueueRequirements();
+            GUILayout.Space(8);
+            DrawPlayerStoreMutations();
+            GUILayout.Space(15);
             DrawActions();
             GUILayout.Space(10);
             EditorGUILayout.EndScrollView();
@@ -516,6 +520,106 @@ namespace TurnKit.Editor
             EditorGUILayout.EndHorizontal();
         }
 
+        private void DrawQueueRequirements()
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField($"Queue Requirements ({relay.queueRequirements.Count})", new GUIStyle(EditorStyles.boldLabel) { fontSize = 12 });
+            GUILayout.Space(4);
+
+            if (relay.queueRequirements.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No queue requirements configured.", MessageType.Info);
+            }
+            else
+            {
+                for (int i = 0; i < relay.queueRequirements.Count; i++)
+                {
+                    var requirement = relay.queueRequirements[i];
+                    string label = string.IsNullOrWhiteSpace(requirement?.name) ? "(unnamed)" : requirement.name;
+                    int conditionCount = requirement?.conditions?.Count ?? 0;
+
+                    EditorGUILayout.BeginHorizontal(GUI.skin.box);
+                    EditorGUILayout.LabelField($"{label} | {requirement?.combinator} | conditions: {conditionCount}", EditorStyles.miniLabel);
+                    GUILayout.FlexibleSpace();
+                    if (GUILayout.Button("Edit", GUILayout.Width(50)))
+                    {
+                        QueueRequirementEditWindow.ShowWindow(relay, requirement);
+                    }
+                    if (GUILayout.Button("X", GUILayout.Width(24)))
+                    {
+                        relay.queueRequirements.RemoveAt(i);
+                        GUIUtility.ExitGUI();
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("+ Add", GUILayout.Width(60)))
+            {
+                var requirement = new TurnKitConfig.QueueRequirementConfig
+                {
+                    conditions = new List<TurnKitConfig.RelayConditionConfig>()
+                };
+                relay.queueRequirements.Add(requirement);
+                QueueRequirementEditWindow.ShowWindow(relay, requirement);
+            }
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawPlayerStoreMutations()
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField($"Player Store Mutations ({relay.playerStoreMutations.Count}/100)", new GUIStyle(EditorStyles.boldLabel) { fontSize = 12 });
+            GUILayout.Space(4);
+
+            if (relay.playerStoreMutations.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No player store mutations configured.", MessageType.Info);
+            }
+            else
+            {
+                for (int i = 0; i < relay.playerStoreMutations.Count; i++)
+                {
+                    var mutation = relay.playerStoreMutations[i];
+                    string id = string.IsNullOrWhiteSpace(mutation?.mutationId) ? "(unnamed)" : mutation.mutationId;
+                    string storeKey = string.IsNullOrWhiteSpace(mutation?.storeKey) ? "(no storeKey)" : mutation.storeKey;
+                    EditorGUILayout.BeginHorizontal(GUI.skin.box);
+                    EditorGUILayout.LabelField($"{id} | {mutation?.phase} | {mutation?.target} | {storeKey} | {mutation?.operation}", EditorStyles.miniLabel);
+                    GUILayout.FlexibleSpace();
+                    if (GUILayout.Button("Edit", GUILayout.Width(50)))
+                    {
+                        PlayerStoreMutationEditWindow.ShowWindow(relay, mutation);
+                    }
+                    if (GUILayout.Button("X", GUILayout.Width(24)))
+                    {
+                        relay.playerStoreMutations.RemoveAt(i);
+                        GUIUtility.ExitGUI();
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.FlexibleSpace();
+            EditorGUI.BeginDisabledGroup(relay.playerStoreMutations.Count >= 100);
+            if (GUILayout.Button("+ Add", GUILayout.Width(60)))
+            {
+                var mutation = new TurnKitConfig.PlayerStoreMutationConfig
+                {
+                    conditions = new List<TurnKitConfig.RelayConditionConfig>(),
+                    stringListValue = new List<string>()
+                };
+                relay.playerStoreMutations.Add(mutation);
+                PlayerStoreMutationEditWindow.ShowWindow(relay, mutation);
+            }
+            EditorGUI.EndDisabledGroup();
+            EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
+        }
+
         private static void DrawSlugValidation(string label, string value)
         {
             if (TurnKitConfigValidator.TryGetSlugNameError(value, out string error))
@@ -652,6 +756,16 @@ namespace TurnKit.Editor
             if (relay.trackedStats == null)
             {
                 relay.trackedStats = new List<TurnKitConfig.TrackedStatConfig>();
+            }
+
+            if (relay.queueRequirements == null)
+            {
+                relay.queueRequirements = new List<TurnKitConfig.QueueRequirementConfig>();
+            }
+
+            if (relay.playerStoreMutations == null)
+            {
+                relay.playerStoreMutations = new List<TurnKitConfig.PlayerStoreMutationConfig>();
             }
 
             relay.afkTurnTimerSeconds = Mathf.Max(0, relay.afkTurnTimerSeconds);

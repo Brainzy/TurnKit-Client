@@ -30,6 +30,9 @@ namespace TurnKit
         [Header("Relay Configs")]
         public List<RelayConfig> relayConfigs = new List<RelayConfig>();
 
+        [Header("Player Store")]
+        public List<PlayerStoreDefConfig> playerStoreDefs = new();
+
         private static TurnKitConfig _instance;
 
         public static TurnKitConfig Instance
@@ -84,6 +87,8 @@ namespace TurnKit
             public bool revealPrivateListsOnTimeout = false;
             public List<RelayListConfig> lists = new();
             public List<TrackedStatConfig> trackedStats = new();
+            public List<QueueRequirementConfig> queueRequirements = new();
+            public List<PlayerStoreMutationConfig> playerStoreMutations = new();
         }
     
         [Serializable]
@@ -118,6 +123,39 @@ namespace TurnKit
         }
 
         [Serializable]
+        public class RelayConditionConfig
+        {
+            public ConditionSource source = ConditionSource.STORE;
+            public string key;
+            public ConditionOperator @operator = ConditionOperator.EQ;
+            public string value;
+        }
+
+        [Serializable]
+        public class QueueRequirementConfig
+        {
+            public string name;
+            public RuleCombinator combinator = RuleCombinator.AND;
+            public List<RelayConditionConfig> conditions = new();
+        }
+
+        [Serializable]
+        public class PlayerStoreMutationConfig
+        {
+            public string mutationId;
+            public RulePhase phase = RulePhase.ON_MATCH_START;
+            public MutationTarget target = MutationTarget.ACTING_PLAYER;
+            public string storeKey;
+            public MutationOperation operation = MutationOperation.SET;
+            public RuleCombinator combinator = RuleCombinator.AND;
+            public List<RelayConditionConfig> conditions = new();
+            public PlayerStoreValueType valueType = PlayerStoreValueType.STRING;
+            public string stringValue;
+            public double numberValue;
+            public List<string> stringListValue = new();
+        }
+
+        [Serializable]
         public class WebhookConfig
         {
             public string entityId;
@@ -133,6 +171,15 @@ namespace TurnKit
         {
             public string key;
             public string value;
+        }
+
+        [Serializable]
+        public class PlayerStoreDefConfig
+        {
+            public string storeKey;
+            public PlayerStoreValueType valueType = PlayerStoreValueType.STRING;
+            public bool clientWritable;
+            public bool clientReadable;
         }
     
         public enum PlayerSlot
@@ -200,6 +247,61 @@ namespace TurnKit
         {
             YOUR_BACKEND,
             EMAIL_OTP
+        }
+
+        public enum PlayerStoreValueType
+        {
+            STRING,
+            NUMBER,
+            STRING_LIST
+        }
+
+        public enum RuleCombinator
+        {
+            AND,
+            OR
+        }
+
+        public enum ConditionSource
+        {
+            STORE
+        }
+
+        public enum ConditionOperator
+        {
+            EQ,
+            NEQ,
+            GT,
+            GTE,
+            LT,
+            LTE,
+            CONTAINS,
+            NOT_CONTAINS
+        }
+
+        public enum RulePhase
+        {
+            ON_MATCH_START,
+            ON_MATCH_END
+        }
+
+        public enum MutationTarget
+        {
+            ACTING_PLAYER,
+            ALL_PLAYERS,
+            WINNER,
+            LOSER
+        }
+
+        public enum MutationOperation
+        {
+            SET,
+            ADD,
+            SUB,
+            LIST_SET,
+            LIST_ADD,
+            LIST_REMOVE,
+            LIST_CLEAR
         }
     }
 }

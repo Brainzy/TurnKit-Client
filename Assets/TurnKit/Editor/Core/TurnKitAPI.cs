@@ -29,6 +29,7 @@ namespace TurnKit.Editor
             public string selectedClientKey;
             public List<TurnKitConfig.LeaderboardConfig> leaderboards;
             public List<TurnKitConfig.RelayConfig> relayConfigs;
+            public List<TurnKitConfig.PlayerStoreDefConfig> playerStoreDefs;
             public TurnKitConfig.PlayerAuthPolicy playerAuthPolicy;
             public List<TurnKitConfig.PlayerAuthMethod> playerAuthMethods;
         }
@@ -93,6 +94,7 @@ namespace TurnKit.Editor
                 },
                 leaderboards = ParseLeaderboardConfigList(source["leaderboards"]),
                 relayConfigs = ParseRelayConfigList(source["relayConfigs"].ToString()),
+                playerStoreDefs = ParsePlayerStoreDefsNode(source["playerStoreDefs"]),
                 playerAuthPolicy = ParseNullableEnum(gameNode["playerAuthPolicy"], ParseNullableEnum(authNode["policy"], TurnKitConfig.PlayerAuthPolicy.NO_AUTH)),
                 playerAuthMethods = ParseAuthMethodList(authNode["methods"])
             };
@@ -233,6 +235,62 @@ namespace TurnKit.Editor
             return SendRequest(request, jwt, _ => onSuccess?.Invoke(), onError);
         }
 
+        public static IEnumerator FetchPlayerStoreDefs(
+            string gameKeyId,
+            string jwt,
+            Action<List<TurnKitConfig.PlayerStoreDefConfig>> onSuccess,
+            Action<string> onError)
+        {
+            var req = UnityWebRequest.Get($"{BaseUrl}/v1/dev/player-store-defs?gameKeyId={gameKeyId}");
+            return SendRequest(req, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParsePlayerStoreDefList(responseText));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"FetchPlayerStoreDefs Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        public static IEnumerator CreatePlayerStoreDef(
+            string gameKeyId,
+            TurnKitConfig.PlayerStoreDefConfig def,
+            string jwt,
+            Action<TurnKitConfig.PlayerStoreDefConfig> onSuccess,
+            Action<string> onError)
+        {
+            var request = new UnityWebRequest($"{BaseUrl}/v1/dev/player-store-defs?gameKeyId={gameKeyId}", "POST");
+            request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(BuildPlayerStoreDefJson(def)));
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParsePlayerStoreDef(JSON.Parse(responseText)));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"CreatePlayerStoreDef Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        public static IEnumerator DeletePlayerStoreDef(
+            string gameKeyId,
+            string storeKey,
+            string jwt,
+            Action onSuccess,
+            Action<string> onError)
+        {
+            var request = UnityWebRequest.Delete($"{BaseUrl}/v1/dev/player-store-defs/{UnityWebRequest.EscapeURL(storeKey)}?gameKeyId={gameKeyId}");
+            return SendRequest(request, jwt, _ => onSuccess?.Invoke(), onError);
+        }
+
         private static IEnumerator SendWebhookWrite(
             string url,
             string method,
@@ -356,7 +414,9 @@ namespace TurnKit.Editor
                 onTurnTimeout = ParseNullableEnum(node["onTurnTimeout"], TurnKitConfig.OnTurnTimeout.CHANGE_TO_NEXT_PLAYER),
                 revealPrivateListsOnTimeout = node["revealPrivateListsOnTimeout"].AsBool,
                 lists = ParseRelayLists(node["lists"]),
-                trackedStats = ParseTrackedStats(node["trackedStats"])
+                trackedStats = ParseTrackedStats(node["trackedStats"]),
+                queueRequirements = ParseQueueRequirements(node["queueRequirements"]),
+                playerStoreMutations = ParsePlayerStoreMutations(node["playerStoreMutations"])
             };
 
             if (!relay.votingEnabled)
@@ -421,6 +481,80 @@ namespace TurnKit.Editor
             return stats;
         }
 
+        private static List<TurnKitConfig.QueueRequirementConfig> ParseQueueRequirements(JSONNode node)
+        {
+            var requirements = new List<TurnKitConfig.QueueRequirementConfig>();
+            var array = node.AsArray;
+            if (array == null)
+            {
+                return requirements;
+            }
+
+            foreach (JSONNode requirementNode in array)
+            {
+                requirements.Add(new TurnKitConfig.QueueRequirementConfig
+                {
+                    name = requirementNode["name"].IsNull ? null : requirementNode["name"].Value,
+                    combinator = ParseEnum(requirementNode["combinator"], TurnKitConfig.RuleCombinator.AND),
+                    conditions = ParseRelayConditions(requirementNode["conditions"])
+                });
+            }
+
+            return requirements;
+        }
+
+        private static List<TurnKitConfig.PlayerStoreMutationConfig> ParsePlayerStoreMutations(JSONNode node)
+        {
+            var mutations = new List<TurnKitConfig.PlayerStoreMutationConfig>();
+            var array = node.AsArray;
+            if (array == null)
+            {
+                return mutations;
+            }
+
+            foreach (JSONNode mutationNode in array)
+            {
+                var mutation = new TurnKitConfig.PlayerStoreMutationConfig
+                {
+                    mutationId = mutationNode["mutationId"].IsNull ? null : mutationNode["mutationId"].Value,
+                    phase = ParseEnum(mutationNode["phase"], TurnKitConfig.RulePhase.ON_MATCH_START),
+                    target = ParseEnum(mutationNode["target"], TurnKitConfig.MutationTarget.ACTING_PLAYER),
+                    storeKey = mutationNode["storeKey"],
+                    operation = ParseEnum(mutationNode["operation"], TurnKitConfig.MutationOperation.SET),
+                    combinator = ParseEnum(mutationNode["combinator"], TurnKitConfig.RuleCombinator.AND),
+                    conditions = ParseRelayConditions(mutationNode["conditions"])
+                };
+
+                ApplyMutationValue(mutation, mutationNode["value"]);
+                mutations.Add(mutation);
+            }
+
+            return mutations;
+        }
+
+        private static List<TurnKitConfig.RelayConditionConfig> ParseRelayConditions(JSONNode node)
+        {
+            var conditions = new List<TurnKitConfig.RelayConditionConfig>();
+            var array = node.AsArray;
+            if (array == null)
+            {
+                return conditions;
+            }
+
+            foreach (JSONNode conditionNode in array)
+            {
+                conditions.Add(new TurnKitConfig.RelayConditionConfig
+                {
+                    source = ParseEnum(conditionNode["source"], TurnKitConfig.ConditionSource.STORE),
+                    key = conditionNode["key"],
+                    @operator = ParseEnum(conditionNode["operator"], TurnKitConfig.ConditionOperator.EQ),
+                    value = conditionNode["value"].IsNull ? null : conditionNode["value"].Value
+                });
+            }
+
+            return conditions;
+        }
+
         private static void ApplyInitialValue(TurnKitConfig.TrackedStatConfig stat, JSONNode node)
         {
             stat.initialDouble = 0d;
@@ -446,6 +580,40 @@ namespace TurnKit.Editor
                     }
                     break;
             }
+        }
+
+        private static void ApplyMutationValue(TurnKitConfig.PlayerStoreMutationConfig mutation, JSONNode node)
+        {
+            mutation.valueType = TurnKitConfig.PlayerStoreValueType.STRING;
+            mutation.stringValue = string.Empty;
+            mutation.numberValue = 0d;
+            mutation.stringListValue = new List<string>();
+
+            if (node == null || node.IsNull || mutation.operation == TurnKitConfig.MutationOperation.LIST_CLEAR)
+            {
+                return;
+            }
+
+            if (node.Tag == JSONNodeType.Number)
+            {
+                mutation.valueType = TurnKitConfig.PlayerStoreValueType.NUMBER;
+                mutation.numberValue = node.AsDouble;
+                return;
+            }
+
+            if (node.Tag == JSONNodeType.Array)
+            {
+                mutation.valueType = TurnKitConfig.PlayerStoreValueType.STRING_LIST;
+                foreach (JSONNode item in node.AsArray)
+                {
+                    mutation.stringListValue.Add(item.Value);
+                }
+
+                return;
+            }
+
+            mutation.valueType = TurnKitConfig.PlayerStoreValueType.STRING;
+            mutation.stringValue = node.Value;
         }
 
         private static List<TurnKitConfig.TrackedStatSyncTargetConfig> ParseSyncTargets(JSONNode node)
@@ -521,6 +689,51 @@ namespace TurnKit.Editor
             return methods;
         }
 
+        private static List<TurnKitConfig.PlayerStoreDefConfig> ParsePlayerStoreDefList(string json)
+        {
+            var defs = new List<TurnKitConfig.PlayerStoreDefConfig>();
+            var array = JSON.Parse(json).AsArray;
+            if (array == null)
+            {
+                return defs;
+            }
+
+            foreach (JSONNode node in array)
+            {
+                defs.Add(ParsePlayerStoreDef(node));
+            }
+
+            return defs;
+        }
+
+        private static List<TurnKitConfig.PlayerStoreDefConfig> ParsePlayerStoreDefsNode(JSONNode node)
+        {
+            var defs = new List<TurnKitConfig.PlayerStoreDefConfig>();
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return defs;
+            }
+
+            foreach (JSONNode item in array)
+            {
+                defs.Add(ParsePlayerStoreDef(item));
+            }
+
+            return defs;
+        }
+
+        private static TurnKitConfig.PlayerStoreDefConfig ParsePlayerStoreDef(JSONNode node)
+        {
+            return new TurnKitConfig.PlayerStoreDefConfig
+            {
+                storeKey = node["storeKey"],
+                valueType = ParseEnum(node["valueType"], TurnKitConfig.PlayerStoreValueType.STRING),
+                clientWritable = node["clientWritable"].AsBool,
+                clientReadable = node["clientReadable"].AsBool
+            };
+        }
+
         private static TurnKitConfig.WebhookConfig ParseWebhook(JSONNode node)
         {
             var webhook = new TurnKitConfig.WebhookConfig
@@ -574,7 +787,126 @@ namespace TurnKit.Editor
             node["revealPrivateListsOnTimeout"] = relay.revealPrivateListsOnTimeout;
             node["lists"] = BuildRelayListsNode(relay.lists);
             node["trackedStats"] = BuildTrackedStatsNode(relay.trackedStats);
+            node["queueRequirements"] = BuildQueueRequirementsNode(relay.queueRequirements);
+            node["playerStoreMutations"] = BuildPlayerStoreMutationsNode(relay.playerStoreMutations);
             return node.ToString();
+        }
+
+        private static JSONNode BuildQueueRequirementsNode(List<TurnKitConfig.QueueRequirementConfig> requirements)
+        {
+            var array = new JSONArray();
+            if (requirements == null)
+            {
+                return array;
+            }
+
+            foreach (var requirement in requirements)
+            {
+                var node = new JSONObject
+                {
+                    ["name"] = string.IsNullOrWhiteSpace(requirement.name) ? JSONNull.CreateOrGet() : requirement.name,
+                    ["combinator"] = requirement.combinator.ToString(),
+                    ["conditions"] = BuildRelayConditionsNode(requirement.conditions)
+                };
+                array.Add(node);
+            }
+
+            return array;
+        }
+
+        private static JSONNode BuildPlayerStoreMutationsNode(List<TurnKitConfig.PlayerStoreMutationConfig> mutations)
+        {
+            var array = new JSONArray();
+            if (mutations == null)
+            {
+                return array;
+            }
+
+            foreach (var mutation in mutations)
+            {
+                var node = new JSONObject
+                {
+                    ["mutationId"] = string.IsNullOrWhiteSpace(mutation.mutationId) ? JSONNull.CreateOrGet() : mutation.mutationId,
+                    ["phase"] = mutation.phase.ToString(),
+                    ["target"] = mutation.target.ToString(),
+                    ["storeKey"] = mutation.storeKey,
+                    ["operation"] = mutation.operation.ToString(),
+                    ["combinator"] = mutation.combinator.ToString(),
+                    ["conditions"] = BuildRelayConditionsNode(mutation.conditions),
+                    ["value"] = BuildMutationValueNode(mutation)
+                };
+                array.Add(node);
+            }
+
+            return array;
+        }
+
+        private static JSONNode BuildRelayConditionsNode(List<TurnKitConfig.RelayConditionConfig> conditions)
+        {
+            var array = new JSONArray();
+            if (conditions == null)
+            {
+                return array;
+            }
+
+            foreach (var condition in conditions)
+            {
+                var node = new JSONObject
+                {
+                    ["source"] = condition.source.ToString(),
+                    ["key"] = condition.key,
+                    ["operator"] = condition.@operator.ToString(),
+                    ["value"] = condition.value ?? string.Empty
+                };
+                array.Add(node);
+            }
+
+            return array;
+        }
+
+        private static JSONNode BuildMutationValueNode(TurnKitConfig.PlayerStoreMutationConfig mutation)
+        {
+            switch (mutation.operation)
+            {
+                case TurnKitConfig.MutationOperation.ADD:
+                case TurnKitConfig.MutationOperation.SUB:
+                    return new JSONNumber(mutation.numberValue);
+                case TurnKitConfig.MutationOperation.LIST_SET:
+                case TurnKitConfig.MutationOperation.LIST_ADD:
+                case TurnKitConfig.MutationOperation.LIST_REMOVE:
+                    var listArray = new JSONArray();
+                    if (mutation.stringListValue != null)
+                    {
+                        foreach (var item in mutation.stringListValue)
+                        {
+                            listArray.Add(item ?? string.Empty);
+                        }
+                    }
+
+                    return listArray;
+                case TurnKitConfig.MutationOperation.LIST_CLEAR:
+                    return JSONNull.CreateOrGet();
+                case TurnKitConfig.MutationOperation.SET:
+                default:
+                    switch (mutation.valueType)
+                    {
+                        case TurnKitConfig.PlayerStoreValueType.NUMBER:
+                            return new JSONNumber(mutation.numberValue);
+                        case TurnKitConfig.PlayerStoreValueType.STRING_LIST:
+                            var setArray = new JSONArray();
+                            if (mutation.stringListValue != null)
+                            {
+                                foreach (var item in mutation.stringListValue)
+                                {
+                                    setArray.Add(item ?? string.Empty);
+                                }
+                            }
+
+                            return setArray;
+                        default:
+                            return new JSONString(mutation.stringValue ?? string.Empty);
+                    }
+            }
         }
 
         private static JSONNode BuildRelayListsNode(List<TurnKitConfig.RelayListConfig> lists)
@@ -725,6 +1057,18 @@ namespace TurnKit.Editor
             }
 
             return node;
+        }
+
+        private static string BuildPlayerStoreDefJson(TurnKitConfig.PlayerStoreDefConfig def)
+        {
+            var node = new JSONObject
+            {
+                ["storeKey"] = def.storeKey,
+                ["valueType"] = def.valueType.ToString(),
+                ["clientWritable"] = def.clientWritable,
+                ["clientReadable"] = def.clientReadable
+            };
+            return node.ToString();
         }
 
         private static TEnum ParseEnum<TEnum>(string value, TEnum fallback) where TEnum : struct

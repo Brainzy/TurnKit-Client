@@ -35,6 +35,7 @@ namespace TurnKit.Editor
             }
 
             config.relayConfigs ??= new List<TurnKitConfig.RelayConfig>();
+            config.playerStoreDefs ??= new List<TurnKitConfig.PlayerStoreDefConfig>();
 
             var relaySlugs = new HashSet<string>();
             var relayClassNames = new HashSet<string>();
@@ -67,7 +68,35 @@ namespace TurnKit.Editor
                 ValidateRelay(relay, errors);
             }
 
+            ValidatePlayerStoreDefs(config.playerStoreDefs, errors);
+
             return errors.Count == 0;
+        }
+
+        public static bool TryValidatePlayerStoreDef(TurnKitConfig config, TurnKitConfig.PlayerStoreDefConfig def, out string error)
+        {
+            error = null;
+            if (def == null)
+            {
+                error = "Player store definition is missing.";
+                return false;
+            }
+
+            if (!TryGetPlayerStoreKeyError(def.storeKey, out error))
+            {
+                return false;
+            }
+
+            if (config?.playerStoreDefs != null &&
+                config.playerStoreDefs.Any(existing => existing != null &&
+                                                       !ReferenceEquals(existing, def) &&
+                                                       string.Equals(existing.storeKey, def.storeKey)))
+            {
+                error = $"Duplicate player store key '{def.storeKey}'.";
+                return false;
+            }
+
+            return true;
         }
 
         public static bool TryValidateRelay(TurnKitConfig config, TurnKitConfig.RelayConfig relay, out List<string> errors)
@@ -180,6 +209,24 @@ namespace TurnKit.Editor
             if (ReservedSlugNames.Contains(value))
             {
                 error = "This name is reserved in C# and cannot be used.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetPlayerStoreKeyError(string value, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                error = "Store key cannot be empty.";
+                return false;
+            }
+
+            if (!Regex.IsMatch(value, "^[a-z0-9._-]{1,64}$"))
+            {
+                error = "Store key must match ^[a-z0-9._-]{1,64}$ (lowercase only).";
                 return false;
             }
 
@@ -327,14 +374,129 @@ namespace TurnKit.Editor
                     }
                 }
             }
+
+            ValidateQueueRequirements(relay, errors);
+            ValidatePlayerStoreMutations(relay, errors);
         }
 
         private static void NormalizeRelayConfig(TurnKitConfig.RelayConfig relay)
         {
             relay.lists ??= new List<TurnKitConfig.RelayListConfig>();
             relay.trackedStats ??= new List<TurnKitConfig.TrackedStatConfig>();
+            relay.queueRequirements ??= new List<TurnKitConfig.QueueRequirementConfig>();
+            relay.playerStoreMutations ??= new List<TurnKitConfig.PlayerStoreMutationConfig>();
             relay.afkTurnTimerSeconds = Mathf.Max(0, relay.afkTurnTimerSeconds);
             relay.disconnectedTurnTimerSeconds = Mathf.Max(0, relay.disconnectedTurnTimerSeconds);
+        }
+
+        private static void ValidateQueueRequirements(TurnKitConfig.RelayConfig relay, List<string> errors)
+        {
+            foreach (var requirement in relay.queueRequirements)
+            {
+                if (requirement == null)
+                {
+                    errors.Add($"{relay.slug}: Queue requirements contain a null entry.");
+                    continue;
+                }
+
+                requirement.conditions ??= new List<TurnKitConfig.RelayConditionConfig>();
+                if (requirement.conditions.Count == 0)
+                {
+                    errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' must contain at least one condition.");
+                }
+                if (requirement.conditions.Count > 20)
+                {
+                    errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' exceeds max 20 conditions.");
+                }
+
+                ValidateConditions(relay, $"Queue requirement '{requirement.name ?? "(unnamed)"}'", requirement.conditions, errors);
+            }
+        }
+
+        private static void ValidatePlayerStoreMutations(TurnKitConfig.RelayConfig relay, List<string> errors)
+        {
+            if (relay.playerStoreMutations.Count > 100)
+            {
+                errors.Add($"{relay.slug}: Player store mutations exceed max 100 entries.");
+            }
+
+            foreach (var mutation in relay.playerStoreMutations)
+            {
+                if (mutation == null)
+                {
+                    errors.Add($"{relay.slug}: Player store mutations contain a null entry.");
+                    continue;
+                }
+
+                mutation.conditions ??= new List<TurnKitConfig.RelayConditionConfig>();
+                mutation.stringListValue ??= new List<string>();
+                if (mutation.conditions.Count > 20)
+                {
+                    errors.Add($"{relay.slug}: Mutation '{mutation.mutationId ?? "(unnamed)"}' exceeds max 20 conditions.");
+                }
+
+                if (string.IsNullOrWhiteSpace(mutation.storeKey))
+                {
+                    errors.Add($"{relay.slug}: Mutation storeKey is required.");
+                }
+
+                ValidateConditions(relay, $"Mutation '{mutation.mutationId ?? "(unnamed)"}'", mutation.conditions, errors);
+
+                switch (mutation.operation)
+                {
+                    case TurnKitConfig.MutationOperation.ADD:
+                    case TurnKitConfig.MutationOperation.SUB:
+                        if (mutation.valueType != TurnKitConfig.PlayerStoreValueType.NUMBER)
+                        {
+                            errors.Add($"{relay.slug}: Mutation '{mutation.mutationId ?? "(unnamed)"}' requires NUMBER valueType for {mutation.operation}.");
+                        }
+                        break;
+                    case TurnKitConfig.MutationOperation.LIST_SET:
+                    case TurnKitConfig.MutationOperation.LIST_ADD:
+                    case TurnKitConfig.MutationOperation.LIST_REMOVE:
+                        if (mutation.valueType != TurnKitConfig.PlayerStoreValueType.STRING_LIST)
+                        {
+                            errors.Add($"{relay.slug}: Mutation '{mutation.mutationId ?? "(unnamed)"}' requires STRING_LIST valueType for {mutation.operation}.");
+                        }
+                        break;
+                    case TurnKitConfig.MutationOperation.LIST_CLEAR:
+                        if (mutation.valueType != TurnKitConfig.PlayerStoreValueType.STRING_LIST)
+                        {
+                            mutation.valueType = TurnKitConfig.PlayerStoreValueType.STRING_LIST;
+                        }
+                        break;
+                }
+
+                if (mutation.operation == TurnKitConfig.MutationOperation.LIST_ADD)
+                {
+                    var set = new HashSet<string>();
+                    foreach (var item in mutation.stringListValue)
+                    {
+                        if (!set.Add(item ?? string.Empty))
+                        {
+                            errors.Add($"{relay.slug}: Mutation '{mutation.mutationId ?? "(unnamed)"}' LIST_ADD value contains duplicates.");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void ValidateConditions(TurnKitConfig.RelayConfig relay, string owner, List<TurnKitConfig.RelayConditionConfig> conditions, List<string> errors)
+        {
+            foreach (var condition in conditions)
+            {
+                if (condition == null)
+                {
+                    errors.Add($"{relay.slug}: {owner} contains a null condition.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(condition.key))
+                {
+                    errors.Add($"{relay.slug}: {owner} has condition with empty key.");
+                }
+            }
         }
 
         private static bool ValidateVotingConfiguration(TurnKitConfig.RelayConfig relay, out string error)
@@ -354,6 +516,37 @@ namespace TurnKit.Editor
             }
 
             return true;
+        }
+
+        private static void ValidatePlayerStoreDefs(List<TurnKitConfig.PlayerStoreDefConfig> defs, List<string> errors)
+        {
+            var keys = new HashSet<string>();
+            var members = new HashSet<string>();
+            foreach (var def in defs)
+            {
+                if (def == null)
+                {
+                    errors.Add("Player store defs contain a null entry.");
+                    continue;
+                }
+
+                if (!TryGetPlayerStoreKeyError(def.storeKey, out var keyError))
+                {
+                    errors.Add($"Invalid player store key '{def.storeKey}'. {keyError}");
+                    continue;
+                }
+
+                if (!keys.Add(def.storeKey))
+                {
+                    errors.Add($"Duplicate player store key '{def.storeKey}'.");
+                }
+
+                string memberName = EnumGenerator.ToEnumMemberName(def.storeKey);
+                if (!members.Add(memberName))
+                {
+                    errors.Add($"Player store member name collision. Multiple keys generate '{memberName}'.");
+                }
+            }
         }
     }
 }
