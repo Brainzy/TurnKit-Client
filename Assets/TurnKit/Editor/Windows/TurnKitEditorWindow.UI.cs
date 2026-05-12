@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -145,299 +144,30 @@ namespace TurnKit.Editor
             }
             EditorGUILayout.EndVertical();
         }
-
         private void DrawRelayConfigs()
         {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField($"Relay Configs ({config.relayConfigs.Count})", EditorStyles.boldLabel);
-            if (GUILayout.Button("+ New", GUILayout.Width(60)))
-            {
-                CreateNewRelayConfig();
-            }
-            EditorGUILayout.EndHorizontal();
-            GUILayout.Space(5);
-
-            if (config.relayConfigs.Count == 0)
-            {
-                EditorGUILayout.HelpBox("No relay configs. Click '+ New' to create one or pull from the server.", MessageType.Info);
-            }
-            else
-            {
-                for (int i = 0; i < config.relayConfigs.Count; i++)
-                {
-                    DrawRelayConfig(config.relayConfigs[i], i);
-                    GUILayout.Space(5);
-                }
-            }
-
-            EditorGUILayout.EndVertical();
-        }
-
-        private void DrawRelayConfig(TurnKitConfig.RelayConfig relay, int index)
-        {
-            if (relay == null)
-            {
-                return;
-            }
-
-            NormalizeRelayConfig(relay);
-
-            string foldoutKey = relay.id ?? index.ToString();
-            TurnKitEditorWindowStateController.EnsureConfigFoldout(state, foldoutKey);
-
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            EditorGUILayout.BeginHorizontal();
-            state.ConfigFoldouts[foldoutKey] = EditorGUILayout.Foldout(
-                state.ConfigFoldouts[foldoutKey],
-                $"{relay.slug} ({relay.maxPlayers}p, {relay.lists.Count} lists, {relay.trackedStats.Count} stats)",
-                true);
-
-            if (GUILayout.Button("Edit", GUILayout.Width(50)))
-            {
-                RelayConfigEditWindow.ShowWindow(config, relay);
-            }
-
-            if (GUILayout.Button("X", GUILayout.Width(25)))
-            {
-                if (EditorUtility.DisplayDialog("Delete Relay Config", $"Are you sure you want to delete '{relay.slug}'?", "Delete", "Cancel"))
-                {
-                    DeleteRelayConfig(index);
-                    GUIUtility.ExitGUI();
-                }
-            }
-            EditorGUILayout.EndHorizontal();
-
-            if (state.ConfigFoldouts[foldoutKey])
-            {
-                EditorGUI.indentLevel++;
-                EditorGUI.BeginDisabledGroup(true);
-                EditorGUILayout.TextField("Slug", relay.slug);
-                EditorGUILayout.IntField("Max Players", relay.maxPlayers);
-                EditorGUILayout.EnumPopup("Turn Enforcement", relay.turnEnforcement);
-                if (relay.votingEnabled)
-                {
-                    EditorGUILayout.LabelField("Voting", EditorStyles.boldLabel);
-                    EditorGUI.indentLevel++;
-                    EditorGUILayout.EnumPopup("Mode", relay.votingMode);
-                    EditorGUILayout.IntField("Votes Required", relay.votesRequired);
-                    EditorGUILayout.IntField("Votes to Fail", relay.votesToFail);
-                    EditorGUILayout.EnumPopup("Fail Action", relay.failAction);
-                    EditorGUI.indentLevel--;
-                }
-
-                EditorGUILayout.IntField("Match timeout (minutes)", relay.matchTimeoutMinutes);
-                EditorGUILayout.IntField("Turn timeout (seconds)", relay.turnTimeoutSeconds);
-                EditorGUILayout.IntField("AFK turn timer (seconds)", relay.afkTurnTimerSeconds);
-                EditorGUILayout.IntField("Disconnected turn timer (seconds)", relay.disconnectedTurnTimerSeconds);
-                EditorGUILayout.IntField("Wait reconnect (seconds)", relay.waitReconnectSeconds);
-                EditorGUILayout.IntField("Reconnect move history size", relay.reconnectMoveHistorySize);
-                EditorGUILayout.EnumPopup("On turn timeout", relay.onTurnTimeout);
-                EditorGUILayout.Toggle("Reveal private lists on timeout", relay.revealPrivateListsOnTimeout);
-                GUILayout.Space(5);
-
-                EditorGUILayout.LabelField($"Lists ({relay.lists.Count})", EditorStyles.boldLabel);
-                if (relay.lists.Count == 0)
-                {
-                    EditorGUILayout.LabelField("No lists", EditorStyles.miniLabel);
-                }
-                else
-                {
-                    foreach (var list in relay.lists)
-                    {
-                        EditorGUILayout.BeginVertical(GUI.skin.box);
-                        EditorGUILayout.LabelField(list.name, EditorStyles.boldLabel);
-                        EditorGUILayout.LabelField(list.tag, EditorStyles.miniLabel);
-                        if (list.ownerSlots.Count > 0)
-                        {
-                            EditorGUILayout.LabelField("Owner: " + string.Join(", ", list.ownerSlots), EditorStyles.miniLabel);
-                        }
-                        if (list.visibleToSlots.Count > 0)
-                        {
-                            EditorGUILayout.LabelField("Visible: " + string.Join(", ", list.visibleToSlots), EditorStyles.miniLabel);
-                        }
-                        EditorGUILayout.EndVertical();
-                    }
-                }
-
-                GUILayout.Space(4);
-                EditorGUILayout.LabelField($"Queue Requirements ({relay.queueRequirements.Count})", EditorStyles.boldLabel);
-                EditorGUILayout.LabelField($"Player Store Mutations ({relay.playerStoreMutations.Count})", EditorStyles.boldLabel);
-                GUILayout.Space(4);
-                EditorGUILayout.LabelField($"Tracked Stats ({relay.trackedStats.Count})", EditorStyles.boldLabel);
-                if (relay.trackedStats.Count == 0)
-                {
-                    EditorGUILayout.LabelField("No tracked stats", EditorStyles.miniLabel);
-                }
-                else
-                {
-                    foreach (var stat in relay.trackedStats)
-                    {
-                        EditorGUILayout.BeginVertical(GUI.skin.box);
-                        EditorGUILayout.LabelField(stat.name, EditorStyles.boldLabel);
-                        EditorGUILayout.LabelField($"{stat.dataType} / {stat.scope}", EditorStyles.miniLabel);
-                        if (stat.syncTo != null && stat.syncTo.Count > 0)
-                        {
-                            EditorGUILayout.LabelField("Sync: " + string.Join(", ", stat.syncTo.Select(s => $"{s.destinationType}:{s.destinationId}")), EditorStyles.miniLabel);
-                        }
-                        EditorGUILayout.EndVertical();
-                    }
-                }
-
-                EditorGUI.EndDisabledGroup();
-                EditorGUI.indentLevel--;
-            }
-
-            EditorGUILayout.EndVertical();
+            TurnKitRelayConfigSectionRenderer.Draw(config, state, CreateNewRelayConfig, DeleteRelayConfig, NormalizeRelayConfig);
         }
 
         private void DrawWebhooks()
         {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField($"Webhooks ({state.Webhooks.Count})", EditorStyles.boldLabel);
-            GUILayout.FlexibleSpace();
-            EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
-            if (GUILayout.Button("Refresh", GUILayout.Width(70)))
-            {
-                LoadWebhooks();
-            }
-            if (GUILayout.Button("+ New", GUILayout.Width(60)))
-            {
-                state.Webhooks.Add(new TurnKitConfig.WebhookConfig { headers = new List<TurnKitConfig.WebhookHeader>() });
-            }
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndHorizontal();
-            GUILayout.Space(5);
-
-            if (state.Webhooks.Count == 0)
-            {
-                EditorGUILayout.HelpBox("No webhooks loaded.", MessageType.Info);
-            }
-            else
-            {
-                foreach (var webhook in state.Webhooks.ToList())
-                {
-                    DrawWebhook(webhook);
-                    GUILayout.Space(5);
-                }
-            }
-            EditorGUILayout.EndVertical();
+            TurnKitWebhookSectionRenderer.Draw(config, state, LoadWebhooks, SaveWebhook, DeleteWebhook, DrawWebhookHeaders);
         }
 
         private void DrawPlayerStoreDefs()
         {
-            config.playerStoreDefs ??= new List<TurnKitConfig.PlayerStoreDefConfig>();
-
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField($"Player Store Defs ({config.playerStoreDefs.Count})", EditorStyles.boldLabel);
-            GUILayout.FlexibleSpace();
-            EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
-            if (GUILayout.Button("Refresh", GUILayout.Width(70)))
-            {
-                LoadPlayerStoreDefs();
-            }
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndHorizontal();
-
-            GUILayout.Space(5);
-            EditorGUILayout.LabelField("Create New", EditorStyles.miniBoldLabel);
-            state.NewPlayerStoreKey = EditorGUILayout.TextField("Store Key", state.NewPlayerStoreKey);
-            state.NewPlayerStoreValueType = (TurnKitConfig.PlayerStoreValueType)EditorGUILayout.EnumPopup("Value Type", state.NewPlayerStoreValueType);
-            state.NewPlayerStoreClientWritable = EditorGUILayout.Toggle("Client Writable", state.NewPlayerStoreClientWritable);
-            state.NewPlayerStoreClientReadable = EditorGUILayout.Toggle("Client Readable", state.NewPlayerStoreClientReadable);
-            if (state.NewPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER)
-            {
-                state.NewPlayerStoreNumberMin = EditorGUILayout.TextField("Number Min (Optional)", state.NewPlayerStoreNumberMin);
-                state.NewPlayerStoreNumberMax = EditorGUILayout.TextField("Number Max (Optional)", state.NewPlayerStoreNumberMax);
-            }
-            else
-            {
-                state.NewPlayerStoreNumberMin = string.Empty;
-                state.NewPlayerStoreNumberMax = string.Empty;
-            }
-
-            EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
-            if (GUILayout.Button("Create", GUILayout.Width(80)))
-            {
-                CreatePlayerStoreDef();
-            }
-            EditorGUI.EndDisabledGroup();
-
-            GUILayout.Space(6);
-            if (config.playerStoreDefs.Count == 0)
-            {
-                EditorGUILayout.HelpBox("No player store defs loaded.", MessageType.Info);
-            }
-            else
-            {
-                foreach (var def in config.playerStoreDefs.ToList())
-                {
-                    DrawPlayerStoreDef(def);
-                    GUILayout.Space(4);
-                }
-            }
-
-            EditorGUILayout.EndVertical();
+            TurnKitPlayerStoreSectionRenderer.Draw(
+                config,
+                state,
+                LoadPlayerStoreDefs,
+                CreatePlayerStoreDef,
+                DeletePlayerStoreDef,
+                DrawPlayerStoreDef);
         }
 
         private void DrawPlayerStoreDef(TurnKitConfig.PlayerStoreDefConfig def)
         {
-            if (def == null)
-            {
-                return;
-            }
-
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField(def.storeKey, EditorStyles.boldLabel);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Delete", GUILayout.Width(60)))
-            {
-                DeletePlayerStoreDef(def);
-            }
-            EditorGUILayout.EndHorizontal();
-            EditorGUI.BeginDisabledGroup(true);
-            EditorGUILayout.EnumPopup("Value Type", def.valueType);
-            EditorGUILayout.Toggle("Client Writable", def.clientWritable);
-            EditorGUILayout.Toggle("Client Readable", def.clientReadable);
-            if (def.valueType == TurnKitConfig.PlayerStoreValueType.NUMBER)
-            {
-                EditorGUILayout.TextField("Number Min", def.numberMin.HasValue ? def.numberMin.Value.ToString() : "(none)");
-                EditorGUILayout.TextField("Number Max", def.numberMax.HasValue ? def.numberMax.Value.ToString() : "(none)");
-            }
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndVertical();
-        }
-
-        private void DrawWebhook(TurnKitConfig.WebhookConfig webhook)
-        {
-            string key = webhook.entityId ?? webhook.id ?? "new-webhook";
-            TurnKitEditorWindowStateController.EnsureWebhookFoldout(state, key, string.IsNullOrEmpty(webhook.entityId));
-
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            EditorGUILayout.BeginHorizontal();
-            state.WebhookFoldouts[key] = EditorGUILayout.Foldout(state.WebhookFoldouts[key], string.IsNullOrWhiteSpace(webhook.id) ? "New webhook" : webhook.id, true);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Save", GUILayout.Width(55)))
-            {
-                SaveWebhook(webhook);
-            }
-            if (GUILayout.Button("Delete", GUILayout.Width(55)))
-            {
-                DeleteWebhook(webhook);
-            }
-            EditorGUILayout.EndHorizontal();
-
-            if (state.WebhookFoldouts[key])
-            {
-                webhook.id = EditorGUILayout.TextField("Id", webhook.id ?? string.Empty);
-                webhook.url = EditorGUILayout.TextField("URL", webhook.url ?? string.Empty);
-                DrawWebhookHeaders(webhook);
-            }
-
-            EditorGUILayout.EndVertical();
+            TurnKitPlayerStoreSectionRenderer.DrawDefCard(def, DeletePlayerStoreDef);
         }
 
         private void DrawWebhookHeaders(TurnKitConfig.WebhookConfig webhook)
@@ -536,3 +266,4 @@ namespace TurnKit.Editor
 
     }
 }
+
