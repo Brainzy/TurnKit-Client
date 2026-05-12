@@ -13,7 +13,7 @@ namespace TurnKit
         ALLOW_DELEGATED_SLOTS
     }
 
-    public class Relay : MonoBehaviour
+    public partial class Relay : MonoBehaviour
     {
         private const bool AutoReconnectEnabled = true;
         private const int AutoReconnectMaxAttempts = 5;
@@ -47,18 +47,13 @@ namespace TurnKit
         private RelayTurnTimer _turnTimer;
         private RelayCommandExecutor _commandExecutor;
         private RelayReconnectStore _reconnectStore;
+        private RelayReconnectController _reconnectController;
         private string _relayToken;
         private string _relaySlug;
         private string _sessionId;
         private string _myPlayerId;
         private TurnKitConfig.PlayerSlot _mySlot;
-        private bool _allowReconnect;
-        private bool _sessionTerminated;
         private bool _disconnectEventRaised;
-        private bool _reconnectScheduled;
-        private bool _reconnectInProgress;
-        private float _reconnectTimer;
-        private int _reconnectAttempts;
         private bool _isAfk;
 
         public static event Action<MatchStartedMessage, IReadOnlyList<RelayList>> OnMatchStarted;
@@ -105,6 +100,15 @@ namespace TurnKit
                 subscribeDisconnected: handler => OnDisconnected += handler,
                 unsubscribeDisconnected: handler => OnDisconnected -= handler);
             _reconnectStore = new RelayReconnectStore();
+            _reconnectController = new RelayReconnectController(
+                _transport,
+                lastAcknowledgedMoveNumber: () => _state.LastAcknowledgedMoveNumber,
+                onReconnectFailedExhausted: () => { },
+                isLoggingEnabled: () => TurnKitConfig.Instance != null && TurnKitConfig.Instance.enableLogging,
+                autoReconnectEnabled: AutoReconnectEnabled,
+                autoReconnectMaxAttempts: AutoReconnectMaxAttempts,
+                autoReconnectInitialDelaySeconds: AutoReconnectInitialDelaySeconds,
+                autoReconnectMaxDelaySeconds: AutoReconnectMaxDelaySeconds);
         }
 
         public static Task<bool> MatchWithAnyone(
@@ -172,9 +176,7 @@ namespace TurnKit
                 Instance._mySlot = (TurnKitConfig.PlayerSlot)response.slot;
                 Instance._myPlayerId = identity.PlayerId;
                 Instance._state.SetLocalPlayer(identity.PlayerId);
-                Instance._sessionTerminated = false;
-                Instance._allowReconnect = true;
-                Instance.ResetReconnectBackoff();
+                Instance._reconnectController.MarkSessionActive();
                 Instance.ResetTurnTimer();
                 Instance._commandExecutor.ResetDelegatedIntendedMoveTracking();
 
@@ -196,7 +198,7 @@ namespace TurnKit
                 return false;
             }
 
-            return await Instance.ReconnectInternal(manual: true);
+            return await Instance._reconnectController.Reconnect(manual: true);
         }
 
         public static async Task<bool> Resume(string playerId, string slug, string relayToken, int lastMoveNumber)
@@ -220,13 +222,11 @@ namespace TurnKit
             Instance._relaySlug = slug;
             Instance._myPlayerId = playerId;
             Instance._state.SetLocalPlayer(playerId);
-            Instance._sessionTerminated = false;
-            Instance._allowReconnect = true;
-            Instance.ResetReconnectBackoff();
+            Instance._reconnectController.MarkSessionActive();
             Instance.ResetTurnTimer();
             Instance._commandExecutor.ResetDelegatedIntendedMoveTracking();
 
-            bool resumed = await Instance.ResumeInternal(relayToken, lastMoveNumber);
+            bool resumed = await Instance._reconnectController.Resume(relayToken, lastMoveNumber);
             if (resumed)
             {
                 Instance._reconnectStore.Save(playerId, slug, relayToken, Instance._state.LastAcknowledgedMoveNumber);
@@ -553,7 +553,7 @@ namespace TurnKit
         private void Update()
         {
             _transport?.Tick(Time.deltaTime);
-            TickAutoReconnect(Time.deltaTime);
+            _reconnectController?.Tick(Time.deltaTime);
             _turnTimer.Tick(Time.deltaTime);
         }
 
@@ -566,147 +566,6 @@ namespace TurnKit
             }
         }
 
-        private void HandleConnected()
-        {
-            _state.MarkConnected();
-            _disconnectEventRaised = false;
-            ResetReconnectBackoff();
-            OnConnected?.Invoke();
-
-            if (TurnKitConfig.Instance != null && TurnKitConfig.Instance.enableLogging)
-            {
-                Debug.Log("TurnKit - WebSocket Connected");
-            }
-        }
-
-        private void HandleDisconnected(ulong code)
-        {
-            HandleDisconnectInternal($"closed ({code})");
-        }
-
-        private void HandleTransportError(string err)
-        {
-            HandleDisconnectInternal("error");
-            Debug.LogError($"TurnKit - WebSocket error: {err}");
-        }
-
-        private void HandleIncomingMessage(string raw)
-        {
-            var outcome = _messageRouter.Process(raw);
-            if (outcome == null)
-            {
-                return;
-            }
-
-            _commandExecutor.ResetDelegatedIntendedMoveTracking();
-
-            switch (outcome.EventType)
-            {
-                case RelayEventType.MatchStarted:
-                    _sessionId = outcome.MatchStarted.sessionId;
-                    var localPlayer = outcome.MatchStarted.players?.FirstOrDefault(player => player.playerId == _myPlayerId);
-                    if (localPlayer != null)
-                    {
-                        _mySlot = localPlayer.slot;
-                    }
-
-                    if (outcome.MatchStarted.yourTurn)
-                    {
-                        ApplyTurnTimerFromServer(outcome.MatchStarted.serverNowUtcMs, outcome.MatchStarted.timerEndUtcMs);
-                    }
-                    else
-                    {
-                        StopTurnTimer();
-                    }
-                    OnMatchStarted?.Invoke(outcome.MatchStarted, _state.AllLists);
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log(outcome.MatchStarted.ToString(_state.AllLists.Count));
-                    }
-
-                    break;
-                case RelayEventType.MoveMade:
-                    OnMoveMade?.Invoke(outcome.MoveMade, _state.AllLists);
-                    SaveLastMatchReconnectFromCurrentState();
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log($"TurnKit - MoveMade #{outcome.MoveMade.moveNumber} from {outcome.MoveMade.actingPlayerId}");
-                    }
-
-                    break;
-                case RelayEventType.SyncComplete:
-                    ApplyTurnTimerFromServer(outcome.SyncComplete.serverNowUtcMs, outcome.SyncComplete.timerEndUtcMs);
-                    OnSyncComplete?.Invoke();
-                    SaveLastMatchReconnectFromCurrentState();
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log($"TurnKit - Sync complete (move: {outcome.SyncComplete.moveNumber})");
-                    }
-
-                    break;
-                case RelayEventType.TurnStarted:
-                    ApplyTurnTimerFromServer(outcome.TurnStarted.serverNowUtcMs, outcome.TurnStarted.timerEndUtcMs);
-                    OnTurnStarted?.Invoke(outcome.TurnStarted);
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log($"TurnKit - TurnStarted: {outcome.TurnStarted.activePlayerId}");
-                    }
-
-                    break;
-                case RelayEventType.MoveRequestedForPlayer:
-                    ApplyTurnTimerFromServer(outcome.MoveRequestedForPlayer.serverNowUtcMs, outcome.MoveRequestedForPlayer.timerEndUtcMs);
-                    OnMoveRequestedForPlayer?.Invoke(outcome.MoveRequestedForPlayer);
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log($"TurnKit - MoveRequestedForPlayer slot: {outcome.MoveRequestedForPlayer.playerSlot}");
-                    }
-
-                    break;
-                case RelayEventType.VoteFailed:
-                    OnVoteFailed?.Invoke(outcome.VoteFailed);
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log($"TurnKit - OnVoteFailed: {outcome.VoteFailed.failAction} - {outcome.VoteFailed.moveNumber}");
-                    }
-
-                    break;
-                case RelayEventType.Error:
-                    OnError?.Invoke(outcome.Error);
-                    if (IsReconnectTerminalError(outcome.Error))
-                    {
-                        DisableReconnect();
-                        ClearSavedReconnect();
-                        OnReconnectFailed?.Invoke(outcome.Error);
-                    }
-                    else if (ShouldReconnectOnError(outcome.Error))
-                    {
-                        _ = ReconnectFromStaleSocketError();
-                    }
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log($"TurnKit - OnError: {outcome.Error.code} - {outcome.Error.message}");
-                    }
-
-                    break;
-                case RelayEventType.GameEnded:
-                    OnGameEnded?.Invoke(outcome.GameEnded);
-                    StopTurnTimer();
-                    DisableReconnect();
-                    ClearSavedReconnect();
-                    _transport.MarkDisconnected();
-                    _state.MarkDisconnected();
-                    if (TurnKitConfig.Instance.enableLogging)
-                    {
-                        Debug.Log($"TurnKit - OnGameEnded: {outcome.GameEnded.reason}");
-                    }
-                    break;
-            }
-        }
-
-        private void DispatchListChanged(RelayList list, ListChangeType changeType)
-        {
-            OnListChanged?.Invoke(list, changeType);
-        }
 
         private static string BuildQueueRequestJson(
             string slug,
@@ -789,220 +648,5 @@ namespace TurnKit
             return false;
         }
 
-        private void HandleDisconnectInternal(string reason)
-        {
-            _state.MarkDisconnected();
-            StopTurnTimer();
-            if (!_disconnectEventRaised)
-            {
-                _disconnectEventRaised = true;
-                OnDisconnected?.Invoke();
-            }
-
-            if (TurnKitConfig.Instance != null && TurnKitConfig.Instance.enableLogging)
-            {
-                Debug.Log($"TurnKit - WebSocket disconnected ({reason})");
-            }
-
-            ScheduleAutoReconnect();
-        }
-
-        private void TickAutoReconnect(float deltaTime)
-        {
-            if (!_reconnectScheduled || _reconnectInProgress || _transport == null || _transport.IsConnected)
-            {
-                return;
-            }
-
-            _reconnectTimer -= deltaTime;
-            if (_reconnectTimer > 0f)
-            {
-                return;
-            }
-
-            _ = AttemptAutoReconnectAsync();
-        }
-
-        private async Task AttemptAutoReconnectAsync()
-        {
-            if (_reconnectInProgress || _transport.IsConnected || _sessionTerminated)
-            {
-                return;
-            }
-
-            if (_reconnectAttempts >= AutoReconnectMaxAttempts)
-            {
-                _reconnectScheduled = false;
-                return;
-            }
-
-            _reconnectScheduled = false;
-            _reconnectAttempts++;
-
-            if (TurnKitConfig.Instance != null && TurnKitConfig.Instance.enableLogging)
-            {
-                Debug.Log($"TurnKit - Reconnect attempt {_reconnectAttempts}/{AutoReconnectMaxAttempts}");
-            }
-
-            var success = await ReconnectInternal(manual: false);
-            if (success || _sessionTerminated || _transport.IsConnected)
-            {
-                return;
-            }
-
-            if (_reconnectAttempts >= AutoReconnectMaxAttempts)
-            {
-                if (TurnKitConfig.Instance != null && TurnKitConfig.Instance.enableLogging)
-                {
-                    Debug.LogWarning("TurnKit - Reconnect retries exhausted.");
-                }
-
-                return;
-            }
-
-            _reconnectScheduled = true;
-            _reconnectTimer = CalculateReconnectDelay(_reconnectAttempts);
-        }
-
-        private async Task<bool> ReconnectInternal(bool manual)
-        {
-            if (_sessionTerminated || _transport == null)
-            {
-                return false;
-            }
-
-            if (_transport.IsConnected && !manual)
-            {
-                return true;
-            }
-
-            if (manual)
-            {
-                _reconnectScheduled = false;
-            }
-
-            _reconnectInProgress = true;
-            try
-            {
-                return await _transport.Reconnect(_state.LastAcknowledgedMoveNumber, force: manual);
-            }
-            finally
-            {
-                _reconnectInProgress = false;
-            }
-        }
-
-        private async Task<bool> ResumeInternal(string relayToken, int lastMoveNumber)
-        {
-            if (_sessionTerminated || _transport == null)
-            {
-                return false;
-            }
-
-            _reconnectScheduled = false;
-            _reconnectInProgress = true;
-            try
-            {
-                return await _transport.Resume(relayToken, lastMoveNumber);
-            }
-            finally
-            {
-                _reconnectInProgress = false;
-            }
-        }
-
-        private void ScheduleAutoReconnect()
-        {
-            if (!AutoReconnectEnabled || !_allowReconnect || _sessionTerminated || _transport == null || _transport.IsConnected)
-            {
-                return;
-            }
-
-            if (_reconnectAttempts >= AutoReconnectMaxAttempts)
-            {
-                return;
-            }
-
-            _reconnectScheduled = true;
-            _reconnectTimer = CalculateReconnectDelay(_reconnectAttempts);
-        }
-
-        private void ResetReconnectBackoff()
-        {
-            _reconnectScheduled = false;
-            _reconnectInProgress = false;
-            _reconnectAttempts = 0;
-            _reconnectTimer = 0f;
-        }
-
-        private void ApplyTurnTimerFromServer(long serverNowUtcMs, long? timerEndUtcMs)
-        {
-            _turnTimer.ApplyFromServer(serverNowUtcMs, timerEndUtcMs);
-        }
-
-        private void StopTurnTimer()
-        {
-            _turnTimer.Stop();
-        }
-
-        private void ResetTurnTimer()
-        {
-            _turnTimer.Reset();
-        }
-
-        private void DisableReconnect()
-        {
-            _allowReconnect = false;
-            _sessionTerminated = true;
-            StopTurnTimer();
-            ResetReconnectBackoff();
-        }
-
-        private static float CalculateReconnectDelay(int failedAttempts)
-        {
-            var delay = AutoReconnectInitialDelaySeconds * Mathf.Pow(2f, failedAttempts);
-            return Mathf.Min(delay, AutoReconnectMaxDelaySeconds);
-        }
-
-        private static bool ShouldReconnectOnError(ErrorMessage error)
-        {
-            return error != null && string.Equals(error.code, "STALE_SOCKET", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsReconnectTerminalError(ErrorMessage error)
-        {
-            if (error == null)
-            {
-                return false;
-            }
-
-            return string.Equals(error.code, "RECONNECT_EXPIRED", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(error.code, "RECONNECT_MOVE_GAP_TOO_LARGE", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private async Task ReconnectFromStaleSocketError()
-        {
-            if (_reconnectInProgress || _sessionTerminated || _transport == null)
-            {
-                return;
-            }
-
-            _reconnectScheduled = false;
-            await ReconnectInternal(manual: true);
-        }
-
-        private static void SaveLastMatchReconnectFromCurrentState()
-        {
-            if (_instance == null)
-            {
-                return;
-            }
-
-            _instance._reconnectStore.Save(
-                _instance._myPlayerId,
-                _instance._relaySlug,
-                _instance._relayToken,
-                _instance._state.LastAcknowledgedMoveNumber);
-        }
     }
 }
