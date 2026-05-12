@@ -659,21 +659,7 @@ namespace TurnKit.Editor
 
         private bool HasUnsyncedChanges()
         {
-            if (EnumGenerator.HasChanges(config))
-            {
-                return true;
-            }
-
-            foreach (var relay in config.relayConfigs)
-            {
-                NormalizeRelayConfig(relay);
-                if (string.IsNullOrEmpty(relay.id) && ((relay.lists?.Count ?? 0) > 0 || (relay.trackedStats?.Count ?? 0) > 0))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return TurnKitSyncStateEvaluator.HasUnsyncedChanges(config, NormalizeRelayConfig);
         }
 
         private bool ValidateConfigs()
@@ -692,125 +678,50 @@ namespace TurnKit.Editor
 
         private void PullFromServer()
         {
-            Debug.Log("[TurnKit] Pulling relay configs from server...");
-            EditorCoroutineRunner.StartCoroutine(
-                TurnKitAPI.FetchRelayConfigs(
-                    config.gameKeyId,
-                    EditorPrefs.GetString("TurnKit_SessionToken"),
-                    configs =>
-                    {
-                        config.relayConfigs = configs;
-                        EditorUtility.SetDirty(config);
-                        AssetDatabase.SaveAssets();
-                        EnumGenerator.Generate(config);
-                        InvalidateSyncStateCache();
-                        LoadPlayerStoreDefs();
-                        LoadWebhooks();
-                        Debug.Log($"[TurnKit] Pulled {configs.Count} relay config(s)");
-                        EditorUtility.DisplayDialog("Success", $"Pulled {configs.Count} relay config(s) from server", "OK");
-                        Repaint();
-                    },
-                    error =>
-                    {
-                        Debug.LogError($"[TurnKit] Failed to pull configs: {error}");
-                        EditorUtility.DisplayDialog("Pull Failed", $"Failed to pull configs: {error}", "OK");
-                    }));
+            TurnKitRelaySyncCoordinator.PullFromServer(
+                config,
+                () => EditorPrefs.GetString("TurnKit_SessionToken"),
+                () =>
+                {
+                    EditorUtility.SetDirty(config);
+                    AssetDatabase.SaveAssets();
+                    EnumGenerator.Generate(config);
+                    InvalidateSyncStateCache();
+                    LoadPlayerStoreDefs();
+                    LoadWebhooks();
+                    Repaint();
+                });
         }
 
         private void PushToServer()
         {
-            Debug.Log("[TurnKit] Pushing relay configs to server...");
-            int successCount = 0;
-            int totalCount = config.relayConfigs.Count;
-            foreach (var relay in config.relayConfigs)
-            {
-                EditorCoroutineRunner.StartCoroutine(
-                    TurnKitAPI.PushRelayConfig(
-                        config.gameKeyId,
-                        relay,
-                        EditorPrefs.GetString("TurnKit_SessionToken"),
-                        updatedRelay =>
-                        {
-                            MergeRelayFromServer(relay, updatedRelay);
-                            EditorUtility.SetDirty(config);
-                            successCount++;
-                            if (successCount == totalCount)
-                            {
-                                AssetDatabase.SaveAssets();
-                                EnumGenerator.Generate(config);
-                                InvalidateSyncStateCache();
-                                EditorUtility.DisplayDialog("Push Complete", $"{successCount} config(s) pushed successfully", "OK");
-                                Repaint();
-                            }
-                        },
-                        error =>
-                        {
-                            Debug.LogError($"[TurnKit] Failed to push {relay.slug}: {error}");
-                            EditorUtility.DisplayDialog("Push Failed", $"Failed to push {relay.slug}: {error}", "OK");
-                        }));
-            }
+            TurnKitRelaySyncCoordinator.PushToServer(
+                config,
+                () => EditorPrefs.GetString("TurnKit_SessionToken"),
+                TurnKitRelayMergePolicy.MergeRelayFromServer,
+                () => EditorUtility.SetDirty(config),
+                () =>
+                {
+                    AssetDatabase.SaveAssets();
+                    EnumGenerator.Generate(config);
+                    InvalidateSyncStateCache();
+                    Repaint();
+                });
         }
 
         private static void MergeRelayFromServer(TurnKitConfig.RelayConfig localRelay, TurnKitConfig.RelayConfig serverRelay)
         {
-            if (localRelay == null || serverRelay == null)
-            {
-                return;
-            }
-
-            localRelay.id = serverRelay.id;
-            MergeListsByName(localRelay, serverRelay);
-            MergeTrackedStatsByName(localRelay, serverRelay);
+            TurnKitRelayMergePolicy.MergeRelayFromServer(localRelay, serverRelay);
         }
 
         private static void MergeListsByName(TurnKitConfig.RelayConfig localRelay, TurnKitConfig.RelayConfig serverRelay)
         {
-            if (localRelay.lists == null || serverRelay.lists == null)
-            {
-                return;
-            }
-
-            var serverByName = serverRelay.lists
-                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.name))
-                .ToDictionary(item => item.name, item => item);
-
-            foreach (var local in localRelay.lists)
-            {
-                if (local == null || string.IsNullOrWhiteSpace(local.name))
-                {
-                    continue;
-                }
-
-                if (serverByName.TryGetValue(local.name, out var server))
-                {
-                    local.id = server.id;
-                }
-            }
+            TurnKitRelayMergePolicy.MergeListsByName(localRelay, serverRelay);
         }
 
         private static void MergeTrackedStatsByName(TurnKitConfig.RelayConfig localRelay, TurnKitConfig.RelayConfig serverRelay)
         {
-            if (localRelay.trackedStats == null || serverRelay.trackedStats == null)
-            {
-                return;
-            }
-
-            var serverByName = serverRelay.trackedStats
-                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.name))
-                .ToDictionary(item => item.name, item => item);
-
-            foreach (var local in localRelay.trackedStats)
-            {
-                if (local == null || string.IsNullOrWhiteSpace(local.name))
-                {
-                    continue;
-                }
-
-                if (serverByName.TryGetValue(local.name, out var server))
-                {
-                    local.id = server.id;
-                }
-            }
+            TurnKitRelayMergePolicy.MergeTrackedStatsByName(localRelay, serverRelay);
         }
 
         private void LoadWebhooks()
@@ -1062,27 +973,13 @@ namespace TurnKit.Editor
             }
 
             cachedHasEnumChanges = EnumGenerator.HasChanges(config);
-            cachedHasUnsyncedChanges = ComputeUnsyncedChanges(cachedHasEnumChanges);
+            cachedHasUnsyncedChanges = TurnKitSyncStateEvaluator.ComputeUnsyncedChanges(config, cachedHasEnumChanges, NormalizeRelayConfig);
             nextSyncStateRefreshAt = now + 0.75d;
         }
 
         private bool ComputeUnsyncedChanges(bool hasEnumChanges)
         {
-            if (hasEnumChanges)
-            {
-                return true;
-            }
-
-            foreach (var relay in config.relayConfigs)
-            {
-                NormalizeRelayConfig(relay);
-                if (string.IsNullOrEmpty(relay.id) && ((relay.lists?.Count ?? 0) > 0 || (relay.trackedStats?.Count ?? 0) > 0))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return TurnKitSyncStateEvaluator.ComputeUnsyncedChanges(config, hasEnumChanges, NormalizeRelayConfig);
         }
     }
 }
