@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -8,18 +7,7 @@ namespace TurnKit.Editor
     {
         private TurnKitConfig config;
         private Vector2 scrollPosition;
-        private readonly Dictionary<string, bool> configFoldouts = new();
-        private readonly Dictionary<string, bool> webhookFoldouts = new();
-        private List<TurnKitConfig.WebhookConfig> webhooks = new();
-        private string newPlayerStoreKey = string.Empty;
-        private TurnKitConfig.PlayerStoreValueType newPlayerStoreValueType = TurnKitConfig.PlayerStoreValueType.STRING;
-        private bool newPlayerStoreClientWritable = true;
-        private bool newPlayerStoreClientReadable = true;
-        private string newPlayerStoreNumberMin = string.Empty;
-        private string newPlayerStoreNumberMax = string.Empty;
-        private bool cachedHasEnumChanges = true;
-        private bool cachedHasUnsyncedChanges = true;
-        private double nextSyncStateRefreshAt;
+        private readonly TurnKitEditorWindowState state = new();
 
         [MenuItem("Tools/TurnKit/Configuration", priority = 1)]
         public static void ShowWindow()
@@ -162,7 +150,7 @@ namespace TurnKit.Editor
             TurnKitWebhookService.Load(
                 config,
                 () => EditorPrefs.GetString("TurnKit_SessionToken"),
-                loaded => webhooks = loaded,
+                loaded => state.Webhooks = loaded,
                 Repaint);
         }
 
@@ -182,13 +170,13 @@ namespace TurnKit.Editor
 
         private void CreatePlayerStoreDef()
         {
-            if (!TryParseOptionalDouble(newPlayerStoreNumberMin, out var numberMin, out var minError))
+            if (!TryParseOptionalDouble(state.NewPlayerStoreNumberMin, out var numberMin, out var minError))
             {
                 EditorUtility.DisplayDialog("Player Store Def Invalid", minError, "OK");
                 return;
             }
 
-            if (!TryParseOptionalDouble(newPlayerStoreNumberMax, out var numberMax, out var maxError))
+            if (!TryParseOptionalDouble(state.NewPlayerStoreNumberMax, out var numberMax, out var maxError))
             {
                 EditorUtility.DisplayDialog("Player Store Def Invalid", maxError, "OK");
                 return;
@@ -196,12 +184,12 @@ namespace TurnKit.Editor
 
             var def = new TurnKitConfig.PlayerStoreDefConfig
             {
-                storeKey = newPlayerStoreKey?.Trim(),
-                valueType = newPlayerStoreValueType,
-                clientWritable = newPlayerStoreClientWritable,
-                clientReadable = newPlayerStoreClientReadable,
-                numberMin = newPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER ? numberMin : null,
-                numberMax = newPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER ? numberMax : null
+                storeKey = state.NewPlayerStoreKey?.Trim(),
+                valueType = state.NewPlayerStoreValueType,
+                clientWritable = state.NewPlayerStoreClientWritable,
+                clientReadable = state.NewPlayerStoreClientReadable,
+                numberMin = state.NewPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER ? numberMin : null,
+                numberMax = state.NewPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER ? numberMax : null
             };
 
             if (!TurnKitConfigValidator.TryValidatePlayerStoreDef(config, def, out var error))
@@ -216,9 +204,7 @@ namespace TurnKit.Editor
                 () => EditorPrefs.GetString("TurnKit_SessionToken"),
                 () =>
                 {
-                    newPlayerStoreKey = string.Empty;
-                    newPlayerStoreNumberMin = string.Empty;
-                    newPlayerStoreNumberMax = string.Empty;
+                    TurnKitEditorWindowStateController.ResetNewPlayerStoreDraft(state);
                     InvalidateSyncStateCache();
                     LoadPlayerStoreDefs();
                 },
@@ -269,7 +255,7 @@ namespace TurnKit.Editor
             TurnKitWebhookService.Save(
                 config,
                 webhook,
-                webhooks,
+                state.Webhooks,
                 () => EditorPrefs.GetString("TurnKit_SessionToken"),
                 LoadWebhooks,
                 Repaint);
@@ -280,7 +266,7 @@ namespace TurnKit.Editor
             TurnKitWebhookService.Delete(
                 config,
                 webhook,
-                webhooks,
+                state.Webhooks,
                 () => EditorPrefs.GetString("TurnKit_SessionToken"),
                 LoadWebhooks,
                 Repaint);
@@ -314,27 +300,12 @@ namespace TurnKit.Editor
 
         private void InvalidateSyncStateCache()
         {
-            nextSyncStateRefreshAt = 0d;
+            TurnKitEditorWindowStateController.InvalidateSyncStateCache(state);
         }
 
         private void RefreshSyncStateIfNeeded()
         {
-            if (config == null)
-            {
-                cachedHasEnumChanges = false;
-                cachedHasUnsyncedChanges = false;
-                return;
-            }
-
-            double now = EditorApplication.timeSinceStartup;
-            if (now < nextSyncStateRefreshAt)
-            {
-                return;
-            }
-
-            cachedHasEnumChanges = EnumGenerator.HasChanges(config);
-            cachedHasUnsyncedChanges = TurnKitSyncStateEvaluator.ComputeUnsyncedChanges(config, cachedHasEnumChanges, NormalizeRelayConfig);
-            nextSyncStateRefreshAt = now + 0.75d;
+            TurnKitEditorWindowStateController.RefreshSyncStateIfNeeded(state, config, NormalizeRelayConfig);
         }
     }
 }

@@ -184,15 +184,12 @@ namespace TurnKit.Editor
             NormalizeRelayConfig(relay);
 
             string foldoutKey = relay.id ?? index.ToString();
-            if (!configFoldouts.ContainsKey(foldoutKey))
-            {
-                configFoldouts[foldoutKey] = false;
-            }
+            TurnKitEditorWindowStateController.EnsureConfigFoldout(state, foldoutKey);
 
             EditorGUILayout.BeginVertical(GUI.skin.box);
             EditorGUILayout.BeginHorizontal();
-            configFoldouts[foldoutKey] = EditorGUILayout.Foldout(
-                configFoldouts[foldoutKey],
+            state.ConfigFoldouts[foldoutKey] = EditorGUILayout.Foldout(
+                state.ConfigFoldouts[foldoutKey],
                 $"{relay.slug} ({relay.maxPlayers}p, {relay.lists.Count} lists, {relay.trackedStats.Count} stats)",
                 true);
 
@@ -211,7 +208,7 @@ namespace TurnKit.Editor
             }
             EditorGUILayout.EndHorizontal();
 
-            if (configFoldouts[foldoutKey])
+            if (state.ConfigFoldouts[foldoutKey])
             {
                 EditorGUI.indentLevel++;
                 EditorGUI.BeginDisabledGroup(true);
@@ -298,7 +295,7 @@ namespace TurnKit.Editor
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField($"Webhooks ({webhooks.Count})", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField($"Webhooks ({state.Webhooks.Count})", EditorStyles.boldLabel);
             GUILayout.FlexibleSpace();
             EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
             if (GUILayout.Button("Refresh", GUILayout.Width(70)))
@@ -307,19 +304,19 @@ namespace TurnKit.Editor
             }
             if (GUILayout.Button("+ New", GUILayout.Width(60)))
             {
-                webhooks.Add(new TurnKitConfig.WebhookConfig { headers = new List<TurnKitConfig.WebhookHeader>() });
+                state.Webhooks.Add(new TurnKitConfig.WebhookConfig { headers = new List<TurnKitConfig.WebhookHeader>() });
             }
             EditorGUI.EndDisabledGroup();
             EditorGUILayout.EndHorizontal();
             GUILayout.Space(5);
 
-            if (webhooks.Count == 0)
+            if (state.Webhooks.Count == 0)
             {
                 EditorGUILayout.HelpBox("No webhooks loaded.", MessageType.Info);
             }
             else
             {
-                foreach (var webhook in webhooks.ToList())
+                foreach (var webhook in state.Webhooks.ToList())
                 {
                     DrawWebhook(webhook);
                     GUILayout.Space(5);
@@ -346,19 +343,19 @@ namespace TurnKit.Editor
 
             GUILayout.Space(5);
             EditorGUILayout.LabelField("Create New", EditorStyles.miniBoldLabel);
-            newPlayerStoreKey = EditorGUILayout.TextField("Store Key", newPlayerStoreKey);
-            newPlayerStoreValueType = (TurnKitConfig.PlayerStoreValueType)EditorGUILayout.EnumPopup("Value Type", newPlayerStoreValueType);
-            newPlayerStoreClientWritable = EditorGUILayout.Toggle("Client Writable", newPlayerStoreClientWritable);
-            newPlayerStoreClientReadable = EditorGUILayout.Toggle("Client Readable", newPlayerStoreClientReadable);
-            if (newPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER)
+            state.NewPlayerStoreKey = EditorGUILayout.TextField("Store Key", state.NewPlayerStoreKey);
+            state.NewPlayerStoreValueType = (TurnKitConfig.PlayerStoreValueType)EditorGUILayout.EnumPopup("Value Type", state.NewPlayerStoreValueType);
+            state.NewPlayerStoreClientWritable = EditorGUILayout.Toggle("Client Writable", state.NewPlayerStoreClientWritable);
+            state.NewPlayerStoreClientReadable = EditorGUILayout.Toggle("Client Readable", state.NewPlayerStoreClientReadable);
+            if (state.NewPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER)
             {
-                newPlayerStoreNumberMin = EditorGUILayout.TextField("Number Min (Optional)", newPlayerStoreNumberMin);
-                newPlayerStoreNumberMax = EditorGUILayout.TextField("Number Max (Optional)", newPlayerStoreNumberMax);
+                state.NewPlayerStoreNumberMin = EditorGUILayout.TextField("Number Min (Optional)", state.NewPlayerStoreNumberMin);
+                state.NewPlayerStoreNumberMax = EditorGUILayout.TextField("Number Max (Optional)", state.NewPlayerStoreNumberMax);
             }
             else
             {
-                newPlayerStoreNumberMin = string.Empty;
-                newPlayerStoreNumberMax = string.Empty;
+                state.NewPlayerStoreNumberMin = string.Empty;
+                state.NewPlayerStoreNumberMax = string.Empty;
             }
 
             EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
@@ -417,14 +414,11 @@ namespace TurnKit.Editor
         private void DrawWebhook(TurnKitConfig.WebhookConfig webhook)
         {
             string key = webhook.entityId ?? webhook.id ?? "new-webhook";
-            if (!webhookFoldouts.ContainsKey(key))
-            {
-                webhookFoldouts[key] = string.IsNullOrEmpty(webhook.entityId);
-            }
+            TurnKitEditorWindowStateController.EnsureWebhookFoldout(state, key, string.IsNullOrEmpty(webhook.entityId));
 
             EditorGUILayout.BeginVertical(GUI.skin.box);
             EditorGUILayout.BeginHorizontal();
-            webhookFoldouts[key] = EditorGUILayout.Foldout(webhookFoldouts[key], string.IsNullOrWhiteSpace(webhook.id) ? "New webhook" : webhook.id, true);
+            state.WebhookFoldouts[key] = EditorGUILayout.Foldout(state.WebhookFoldouts[key], string.IsNullOrWhiteSpace(webhook.id) ? "New webhook" : webhook.id, true);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Save", GUILayout.Width(55)))
             {
@@ -436,7 +430,7 @@ namespace TurnKit.Editor
             }
             EditorGUILayout.EndHorizontal();
 
-            if (webhookFoldouts[key])
+            if (state.WebhookFoldouts[key])
             {
                 webhook.id = EditorGUILayout.TextField("Id", webhook.id ?? string.Empty);
                 webhook.url = EditorGUILayout.TextField("URL", webhook.url ?? string.Empty);
@@ -492,7 +486,7 @@ namespace TurnKit.Editor
 
             GUILayout.Space(3);
             EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || config.relayConfigs.Count == 0);
-            bool hasUnsyncedChanges = cachedHasUnsyncedChanges;
+            bool hasUnsyncedChanges = state.CachedHasUnsyncedChanges;
             string pushButtonLabel = hasUnsyncedChanges ? "Push to API (Out of Sync)" : "Push to API";
             if (GUILayout.Button(pushButtonLabel, GUILayout.Height(30)))
             {
@@ -520,7 +514,7 @@ namespace TurnKit.Editor
             GUILayout.Space(5);
             bool hasCodegenSources = config.relayConfigs.Count > 0 || (config.playerStoreDefs?.Count ?? 0) > 0;
             EditorGUI.BeginDisabledGroup(!hasCodegenSources);
-            bool hasEnumChanges = cachedHasEnumChanges;
+            bool hasEnumChanges = state.CachedHasEnumChanges;
             string buttonLabel = hasEnumChanges ? "Generate Enums (Out of Sync)" : "Generate Enums";
             if (GUILayout.Button(buttonLabel, GUILayout.Height(30)))
             {
