@@ -75,8 +75,7 @@ namespace TurnKit.Editor
                 if (updatedClientKey != config.clientKey)
                 {
                     config.clientKey = updatedClientKey;
-                    EditorUtility.SetDirty(config);
-                    AssetDatabase.SaveAssets();
+                    TurnKitConfigPersistence.SaveConfigOnly(config, InvalidateSyncStateCache);
                 }
 
                 EditorGUI.BeginDisabledGroup(true);
@@ -525,8 +524,7 @@ namespace TurnKit.Editor
             string buttonLabel = hasEnumChanges ? "Generate Enums (Out of Sync)" : "Generate Enums";
             if (GUILayout.Button(buttonLabel, GUILayout.Height(30)))
             {
-                EnumGenerator.Generate(config);
-                InvalidateSyncStateCache();
+                TurnKitConfigPersistence.SaveAndRegenerate(config, InvalidateSyncStateCache);
                 Repaint();
             }
             EditorGUI.EndDisabledGroup();

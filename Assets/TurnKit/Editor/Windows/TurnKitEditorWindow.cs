@@ -79,9 +79,7 @@ namespace TurnKit.Editor
             };
 
             config.relayConfigs.Add(newConfig);
-            EditorUtility.SetDirty(config);
-            AssetDatabase.SaveAssets();
-            InvalidateSyncStateCache();
+            TurnKitConfigPersistence.SaveConfigOnly(config, InvalidateSyncStateCache);
             Debug.Log("[TurnKit] Created new relay config (local only - push to save to server)");
             Repaint();
         }
@@ -99,9 +97,7 @@ namespace TurnKit.Editor
                         () =>
                         {
                             config.relayConfigs.RemoveAt(index);
-                            EditorUtility.SetDirty(config);
-                            AssetDatabase.SaveAssets();
-                            InvalidateSyncStateCache();
+                            TurnKitConfigPersistence.SaveConfigOnly(config, InvalidateSyncStateCache);
                             Debug.Log($"[TurnKit] Deleted relay config: {relay.slug}");
                             Repaint();
                         },
@@ -114,9 +110,7 @@ namespace TurnKit.Editor
             else
             {
                 config.relayConfigs.RemoveAt(index);
-                EditorUtility.SetDirty(config);
-                AssetDatabase.SaveAssets();
-                InvalidateSyncStateCache();
+                TurnKitConfigPersistence.SaveConfigOnly(config, InvalidateSyncStateCache);
                 Debug.Log($"[TurnKit] Removed local relay config: {relay.slug}");
             }
         }
@@ -130,7 +124,7 @@ namespace TurnKit.Editor
                 return false;
             }
 
-            EditorUtility.SetDirty(config);
+            TurnKitConfigPersistence.MarkConfigDirty(config);
             InvalidateSyncStateCache();
             return true;
         }
@@ -142,10 +136,7 @@ namespace TurnKit.Editor
                 () => EditorPrefs.GetString("TurnKit_SessionToken"),
                 () =>
                 {
-                    EditorUtility.SetDirty(config);
-                    AssetDatabase.SaveAssets();
-                    EnumGenerator.Generate(config);
-                    InvalidateSyncStateCache();
+                    TurnKitConfigPersistence.SaveAndRegenerate(config, InvalidateSyncStateCache);
                     LoadPlayerStoreDefs();
                     LoadWebhooks();
                     Repaint();
@@ -158,56 +149,35 @@ namespace TurnKit.Editor
                 config,
                 () => EditorPrefs.GetString("TurnKit_SessionToken"),
                 TurnKitRelayMergePolicy.MergeRelayFromServer,
-                () => EditorUtility.SetDirty(config),
+                () => TurnKitConfigPersistence.MarkConfigDirty(config),
                 () =>
                 {
-                    AssetDatabase.SaveAssets();
-                    EnumGenerator.Generate(config);
-                    InvalidateSyncStateCache();
+                    TurnKitConfigPersistence.SaveAndRegenerate(config, InvalidateSyncStateCache);
                     Repaint();
                 });
         }
 
         private void LoadWebhooks()
         {
-            if (config == null || string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId))
-            {
-                return;
-            }
-
-            EditorCoroutineRunner.StartCoroutine(
-                TurnKitAPI.FetchWebhooks(
-                    config.gameKeyId,
-                    EditorPrefs.GetString("TurnKit_SessionToken"),
-                    loaded =>
-                    {
-                        webhooks = loaded ?? new List<TurnKitConfig.WebhookConfig>();
-                        Repaint();
-                    },
-                    error => Debug.LogWarning($"[TurnKit] Failed to load webhooks: {error}")));
+            TurnKitWebhookService.Load(
+                config,
+                () => EditorPrefs.GetString("TurnKit_SessionToken"),
+                loaded => webhooks = loaded,
+                Repaint);
         }
 
         private void LoadPlayerStoreDefs()
         {
-            if (config == null || string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId))
-            {
-                return;
-            }
-
-            EditorCoroutineRunner.StartCoroutine(
-                TurnKitAPI.FetchPlayerStoreDefs(
-                    config.gameKeyId,
-                    EditorPrefs.GetString("TurnKit_SessionToken"),
-                    loaded =>
-                    {
-                        config.playerStoreDefs = loaded ?? new List<TurnKitConfig.PlayerStoreDefConfig>();
-                        EditorUtility.SetDirty(config);
-                        AssetDatabase.SaveAssets();
-                        EnumGenerator.Generate(config);
-                        InvalidateSyncStateCache();
-                        Repaint();
-                    },
-                    error => Debug.LogWarning($"[TurnKit] Failed to load player store defs: {error}")));
+            TurnKitPlayerStoreDefService.Load(
+                config,
+                () => EditorPrefs.GetString("TurnKit_SessionToken"),
+                loaded =>
+                {
+                    config.playerStoreDefs = loaded;
+                    TurnKitConfigPersistence.SaveAndRegenerate(config, InvalidateSyncStateCache);
+                    Repaint();
+                },
+                TurnKitPlayerStoreDefService.ShowLoadError);
         }
 
         private void CreatePlayerStoreDef()
@@ -240,24 +210,19 @@ namespace TurnKit.Editor
                 return;
             }
 
-            EditorCoroutineRunner.StartCoroutine(
-                TurnKitAPI.CreatePlayerStoreDef(
-                    config.gameKeyId,
-                    def,
-                    EditorPrefs.GetString("TurnKit_SessionToken"),
-                    _ =>
-                    {
-                        newPlayerStoreKey = string.Empty;
-                        newPlayerStoreNumberMin = string.Empty;
-                        newPlayerStoreNumberMax = string.Empty;
-                        InvalidateSyncStateCache();
-                        LoadPlayerStoreDefs();
-                    },
-                    err =>
-                    {
-                        Debug.LogError($"[TurnKit] Failed to create player store def: {err}");
-                        EditorUtility.DisplayDialog("Create Failed", err, "OK");
-                    }));
+            TurnKitPlayerStoreDefService.Create(
+                config,
+                def,
+                () => EditorPrefs.GetString("TurnKit_SessionToken"),
+                () =>
+                {
+                    newPlayerStoreKey = string.Empty;
+                    newPlayerStoreNumberMin = string.Empty;
+                    newPlayerStoreNumberMax = string.Empty;
+                    InvalidateSyncStateCache();
+                    LoadPlayerStoreDefs();
+                },
+                TurnKitPlayerStoreDefService.ShowCreateError);
         }
 
         private static bool TryParseOptionalDouble(string raw, out double? value, out string error)
@@ -291,83 +256,34 @@ namespace TurnKit.Editor
                 return;
             }
 
-            EditorCoroutineRunner.StartCoroutine(
-                TurnKitAPI.DeletePlayerStoreDef(
-                    config.gameKeyId,
-                    def.storeKey,
-                    EditorPrefs.GetString("TurnKit_SessionToken"),
-                    LoadPlayerStoreDefs,
-                    err =>
-                    {
-                        Debug.LogError($"[TurnKit] Failed to delete player store def: {err}");
-                        EditorUtility.DisplayDialog("Delete Failed", err, "OK");
-                    }));
+            TurnKitPlayerStoreDefService.Delete(
+                config,
+                def.storeKey,
+                () => EditorPrefs.GetString("TurnKit_SessionToken"),
+                LoadPlayerStoreDefs,
+                TurnKitPlayerStoreDefService.ShowDeleteError);
         }
 
         private void SaveWebhook(TurnKitConfig.WebhookConfig webhook)
         {
-            if (string.IsNullOrWhiteSpace(webhook.id) || string.IsNullOrWhiteSpace(webhook.url))
-            {
-                EditorUtility.DisplayDialog("Webhook Invalid", "Webhook id and url are required.", "OK");
-                return;
-            }
-
-            var coroutine = string.IsNullOrEmpty(webhook.entityId)
-                ? TurnKitAPI.CreateWebhook(config.gameKeyId, webhook, EditorPrefs.GetString("TurnKit_SessionToken"), saved => ReplaceWebhook(webhook, saved), ShowWebhookError)
-                : TurnKitAPI.UpdateWebhook(config.gameKeyId, webhook, EditorPrefs.GetString("TurnKit_SessionToken"), saved => ReplaceWebhook(webhook, saved), ShowWebhookError);
-            EditorCoroutineRunner.StartCoroutine(coroutine);
-        }
-
-        private void ReplaceWebhook(TurnKitConfig.WebhookConfig original, TurnKitConfig.WebhookConfig saved)
-        {
-            int index = webhooks.IndexOf(original);
-            if (index >= 0)
-            {
-                webhooks[index] = saved;
-            }
-            else
-            {
-                webhooks.Add(saved);
-            }
-
-            LoadWebhooks();
-            RelayConfigEditWindow.ReloadAllOpenWebhookLists();
-            Repaint();
+            TurnKitWebhookService.Save(
+                config,
+                webhook,
+                webhooks,
+                () => EditorPrefs.GetString("TurnKit_SessionToken"),
+                LoadWebhooks,
+                Repaint);
         }
 
         private void DeleteWebhook(TurnKitConfig.WebhookConfig webhook)
         {
-            if (string.IsNullOrEmpty(webhook.entityId))
-            {
-                webhooks.Remove(webhook);
-                Repaint();
-                return;
-            }
-
-            if (!EditorUtility.DisplayDialog("Delete Webhook", $"Delete webhook '{webhook.id}'?", "Delete", "Cancel"))
-            {
-                return;
-            }
-
-            EditorCoroutineRunner.StartCoroutine(
-                TurnKitAPI.DeleteWebhook(
-                    config.gameKeyId,
-                    webhook.id,
-                    EditorPrefs.GetString("TurnKit_SessionToken"),
-                    () =>
-                    {
-                        webhooks.Remove(webhook);
-                        LoadWebhooks();
-                        RelayConfigEditWindow.ReloadAllOpenWebhookLists();
-                        Repaint();
-                    },
-                    ShowWebhookError));
-        }
-
-        private void ShowWebhookError(string error)
-        {
-            Debug.LogError($"[TurnKit] Webhook operation failed: {error}");
-            EditorUtility.DisplayDialog("Webhook Error", error, "OK");
+            TurnKitWebhookService.Delete(
+                config,
+                webhook,
+                webhooks,
+                () => EditorPrefs.GetString("TurnKit_SessionToken"),
+                LoadWebhooks,
+                Repaint);
         }
 
         private static void NormalizeRelayConfig(TurnKitConfig.RelayConfig relay)
