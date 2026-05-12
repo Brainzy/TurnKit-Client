@@ -10,11 +10,17 @@ namespace TurnKit
     {
         public const string Slug = "example";
 
-        public enum List { p1_hidden, p2_hidden, results_public, discard_public }
-        public enum Tag { hand, table, discard }
+        public enum List { discard_public, p1_hidden, p2_hidden, results_public }
+        public enum Tag { discard, hand, table }
 
         internal static readonly Dictionary<List, TurnKitConfig.RelayListConfig> ListMetadata = new()
         {
+            { List.discard_public, new TurnKitConfig.RelayListConfig {
+                name = "discard_public",
+                tag = nameof(Tag.discard),
+                ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 },
+                visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 }
+            } },
             { List.p1_hidden, new TurnKitConfig.RelayListConfig {
                 name = "p1_hidden",
                 tag = nameof(Tag.hand),
@@ -33,22 +39,16 @@ namespace TurnKit
                 ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 },
                 visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 }
             } },
-            { List.discard_public, new TurnKitConfig.RelayListConfig {
-                name = "discard_public",
-                tag = nameof(Tag.discard),
-                ownerSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 },
-                visibleToSlots = new List<TurnKitConfig.PlayerSlot> { TurnKitConfig.PlayerSlot.Player1, TurnKitConfig.PlayerSlot.Player2 }
-            } },
         };
 
         internal static readonly Dictionary<string, TrackedStatMetadata> StatMetadata = new()
         {
-            { "score", new TrackedStatMetadata { Name = "score", DataType = TurnKitConfig.TrackedStatDataType.DOUBLE, Scope = TurnKitConfig.TrackedStatScope.PER_PLAYER } },
+            { "score", new TrackedStatMetadata { Name = "score", DataType = TurnKitConfig.TrackedStatDataType.DOUBLE, Scope = TurnKitConfig.TrackedStatScope.PER_PLAYER, InitialDouble = 0d } },
         };
 
         public static class Stats
         {
-            public static readonly PlayerStatToken<double, DoubleStatBuilder> Score = new(StatMetadata["score"]);
+            public static readonly PlayerStatToken<double, DoubleStatBuilder> Score = new PlayerStatToken<double, DoubleStatBuilder>(StatMetadata["score"]);
         }
     }
 

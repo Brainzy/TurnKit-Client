@@ -725,12 +725,16 @@ namespace TurnKit.Editor
 
         private static TurnKitConfig.PlayerStoreDefConfig ParsePlayerStoreDef(JSONNode node)
         {
+            double? numberMin = node["numberMin"] == null || node["numberMin"].IsNull ? (double?)null : node["numberMin"].AsDouble;
+            double? numberMax = node["numberMax"] == null || node["numberMax"].IsNull ? (double?)null : node["numberMax"].AsDouble;
             return new TurnKitConfig.PlayerStoreDefConfig
             {
                 storeKey = node["storeKey"],
                 valueType = ParseEnum(node["valueType"], TurnKitConfig.PlayerStoreValueType.STRING),
                 clientWritable = node["clientWritable"].AsBool,
-                clientReadable = node["clientReadable"].AsBool
+                clientReadable = node["clientReadable"].AsBool,
+                numberMin = numberMin,
+                numberMax = numberMax
             };
         }
 
@@ -1068,6 +1072,8 @@ namespace TurnKit.Editor
                 ["clientWritable"] = def.clientWritable,
                 ["clientReadable"] = def.clientReadable
             };
+            node["numberMin"] = def.numberMin.HasValue ? new JSONNumber(def.numberMin.Value) : JSONNull.CreateOrGet();
+            node["numberMax"] = def.numberMax.HasValue ? new JSONNumber(def.numberMax.Value) : JSONNull.CreateOrGet();
             return node.ToString();
         }
 

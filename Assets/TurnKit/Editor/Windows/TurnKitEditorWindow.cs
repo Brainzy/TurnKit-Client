@@ -16,6 +16,11 @@ namespace TurnKit.Editor
         private TurnKitConfig.PlayerStoreValueType newPlayerStoreValueType = TurnKitConfig.PlayerStoreValueType.STRING;
         private bool newPlayerStoreClientWritable = true;
         private bool newPlayerStoreClientReadable = true;
+        private string newPlayerStoreNumberMin = string.Empty;
+        private string newPlayerStoreNumberMax = string.Empty;
+        private bool cachedHasEnumChanges = true;
+        private bool cachedHasUnsyncedChanges = true;
+        private double nextSyncStateRefreshAt;
 
         [MenuItem("Tools/TurnKit/Configuration", priority = 1)]
         public static void ShowWindow()
@@ -30,6 +35,7 @@ namespace TurnKit.Editor
             LoadConfig();
             LoadWebhooks();
             LoadPlayerStoreDefs();
+            InvalidateSyncStateCache();
         }
 
         private void LoadConfig()
@@ -390,6 +396,16 @@ namespace TurnKit.Editor
             newPlayerStoreValueType = (TurnKitConfig.PlayerStoreValueType)EditorGUILayout.EnumPopup("Value Type", newPlayerStoreValueType);
             newPlayerStoreClientWritable = EditorGUILayout.Toggle("Client Writable", newPlayerStoreClientWritable);
             newPlayerStoreClientReadable = EditorGUILayout.Toggle("Client Readable", newPlayerStoreClientReadable);
+            if (newPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER)
+            {
+                newPlayerStoreNumberMin = EditorGUILayout.TextField("Number Min (Optional)", newPlayerStoreNumberMin);
+                newPlayerStoreNumberMax = EditorGUILayout.TextField("Number Max (Optional)", newPlayerStoreNumberMax);
+            }
+            else
+            {
+                newPlayerStoreNumberMin = string.Empty;
+                newPlayerStoreNumberMax = string.Empty;
+            }
 
             EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
             if (GUILayout.Button("Create", GUILayout.Width(80)))
@@ -435,6 +451,11 @@ namespace TurnKit.Editor
             EditorGUILayout.EnumPopup("Value Type", def.valueType);
             EditorGUILayout.Toggle("Client Writable", def.clientWritable);
             EditorGUILayout.Toggle("Client Readable", def.clientReadable);
+            if (def.valueType == TurnKitConfig.PlayerStoreValueType.NUMBER)
+            {
+                EditorGUILayout.TextField("Number Min", def.numberMin.HasValue ? def.numberMin.Value.ToString() : "(none)");
+                EditorGUILayout.TextField("Number Max", def.numberMax.HasValue ? def.numberMax.Value.ToString() : "(none)");
+            }
             EditorGUI.EndDisabledGroup();
             EditorGUILayout.EndVertical();
         }
@@ -502,6 +523,8 @@ namespace TurnKit.Editor
 
         private void DrawButtons()
         {
+            RefreshSyncStateIfNeeded();
+
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             var syncHeaderStyle = new GUIStyle(EditorStyles.boldLabel) { fontSize = 12 };
             EditorGUILayout.LabelField("Sync", syncHeaderStyle);
@@ -515,7 +538,7 @@ namespace TurnKit.Editor
 
             GUILayout.Space(3);
             EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || config.relayConfigs.Count == 0);
-            bool hasUnsyncedChanges = HasUnsyncedChanges();
+            bool hasUnsyncedChanges = cachedHasUnsyncedChanges;
             string pushButtonLabel = hasUnsyncedChanges ? "Push to API (Out of Sync)" : "Push to API";
             if (GUILayout.Button(pushButtonLabel, GUILayout.Height(30)))
             {
@@ -543,11 +566,12 @@ namespace TurnKit.Editor
             GUILayout.Space(5);
             bool hasCodegenSources = config.relayConfigs.Count > 0 || (config.playerStoreDefs?.Count ?? 0) > 0;
             EditorGUI.BeginDisabledGroup(!hasCodegenSources);
-            bool hasEnumChanges = EnumGenerator.HasChanges(config);
+            bool hasEnumChanges = cachedHasEnumChanges;
             string buttonLabel = hasEnumChanges ? "Generate Enums (Out of Sync)" : "Generate Enums";
             if (GUILayout.Button(buttonLabel, GUILayout.Height(30)))
             {
                 EnumGenerator.Generate(config);
+                InvalidateSyncStateCache();
                 Repaint();
             }
             EditorGUI.EndDisabledGroup();
@@ -593,6 +617,7 @@ namespace TurnKit.Editor
             config.relayConfigs.Add(newConfig);
             EditorUtility.SetDirty(config);
             AssetDatabase.SaveAssets();
+            InvalidateSyncStateCache();
             Debug.Log("[TurnKit] Created new relay config (local only - push to save to server)");
             Repaint();
         }
@@ -612,6 +637,7 @@ namespace TurnKit.Editor
                             config.relayConfigs.RemoveAt(index);
                             EditorUtility.SetDirty(config);
                             AssetDatabase.SaveAssets();
+                            InvalidateSyncStateCache();
                             Debug.Log($"[TurnKit] Deleted relay config: {relay.slug}");
                             Repaint();
                         },
@@ -626,6 +652,7 @@ namespace TurnKit.Editor
                 config.relayConfigs.RemoveAt(index);
                 EditorUtility.SetDirty(config);
                 AssetDatabase.SaveAssets();
+                InvalidateSyncStateCache();
                 Debug.Log($"[TurnKit] Removed local relay config: {relay.slug}");
             }
         }
@@ -659,6 +686,7 @@ namespace TurnKit.Editor
             }
 
             EditorUtility.SetDirty(config);
+            InvalidateSyncStateCache();
             return true;
         }
 
@@ -675,6 +703,7 @@ namespace TurnKit.Editor
                         EditorUtility.SetDirty(config);
                         AssetDatabase.SaveAssets();
                         EnumGenerator.Generate(config);
+                        InvalidateSyncStateCache();
                         LoadPlayerStoreDefs();
                         LoadWebhooks();
                         Debug.Log($"[TurnKit] Pulled {configs.Count} relay config(s)");
@@ -709,6 +738,7 @@ namespace TurnKit.Editor
                             {
                                 AssetDatabase.SaveAssets();
                                 EnumGenerator.Generate(config);
+                                InvalidateSyncStateCache();
                                 EditorUtility.DisplayDialog("Push Complete", $"{successCount} config(s) pushed successfully", "OK");
                                 Repaint();
                             }
@@ -819,6 +849,7 @@ namespace TurnKit.Editor
                         EditorUtility.SetDirty(config);
                         AssetDatabase.SaveAssets();
                         EnumGenerator.Generate(config);
+                        InvalidateSyncStateCache();
                         Repaint();
                     },
                     error => Debug.LogWarning($"[TurnKit] Failed to load player store defs: {error}")));
@@ -826,12 +857,26 @@ namespace TurnKit.Editor
 
         private void CreatePlayerStoreDef()
         {
+            if (!TryParseOptionalDouble(newPlayerStoreNumberMin, out var numberMin, out var minError))
+            {
+                EditorUtility.DisplayDialog("Player Store Def Invalid", minError, "OK");
+                return;
+            }
+
+            if (!TryParseOptionalDouble(newPlayerStoreNumberMax, out var numberMax, out var maxError))
+            {
+                EditorUtility.DisplayDialog("Player Store Def Invalid", maxError, "OK");
+                return;
+            }
+
             var def = new TurnKitConfig.PlayerStoreDefConfig
             {
                 storeKey = newPlayerStoreKey?.Trim(),
                 valueType = newPlayerStoreValueType,
                 clientWritable = newPlayerStoreClientWritable,
-                clientReadable = newPlayerStoreClientReadable
+                clientReadable = newPlayerStoreClientReadable,
+                numberMin = newPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER ? numberMin : null,
+                numberMax = newPlayerStoreValueType == TurnKitConfig.PlayerStoreValueType.NUMBER ? numberMax : null
             };
 
             if (!TurnKitConfigValidator.TryValidatePlayerStoreDef(config, def, out var error))
@@ -848,6 +893,9 @@ namespace TurnKit.Editor
                     _ =>
                     {
                         newPlayerStoreKey = string.Empty;
+                        newPlayerStoreNumberMin = string.Empty;
+                        newPlayerStoreNumberMax = string.Empty;
+                        InvalidateSyncStateCache();
                         LoadPlayerStoreDefs();
                     },
                     err =>
@@ -855,6 +903,25 @@ namespace TurnKit.Editor
                         Debug.LogError($"[TurnKit] Failed to create player store def: {err}");
                         EditorUtility.DisplayDialog("Create Failed", err, "OK");
                     }));
+        }
+
+        private static bool TryParseOptionalDouble(string raw, out double? value, out string error)
+        {
+            value = null;
+            error = null;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return true;
+            }
+
+            if (!double.TryParse(raw, out var parsed))
+            {
+                error = $"Invalid number bounds value '{raw}'.";
+                return false;
+            }
+
+            value = parsed;
+            return true;
         }
 
         private void DeletePlayerStoreDef(TurnKitConfig.PlayerStoreDefConfig def)
@@ -972,6 +1039,50 @@ namespace TurnKit.Editor
 
             relay.afkTurnTimerSeconds = Mathf.Max(0, relay.afkTurnTimerSeconds);
             relay.disconnectedTurnTimerSeconds = Mathf.Max(0, relay.disconnectedTurnTimerSeconds);
+        }
+
+        private void InvalidateSyncStateCache()
+        {
+            nextSyncStateRefreshAt = 0d;
+        }
+
+        private void RefreshSyncStateIfNeeded()
+        {
+            if (config == null)
+            {
+                cachedHasEnumChanges = false;
+                cachedHasUnsyncedChanges = false;
+                return;
+            }
+
+            double now = EditorApplication.timeSinceStartup;
+            if (now < nextSyncStateRefreshAt)
+            {
+                return;
+            }
+
+            cachedHasEnumChanges = EnumGenerator.HasChanges(config);
+            cachedHasUnsyncedChanges = ComputeUnsyncedChanges(cachedHasEnumChanges);
+            nextSyncStateRefreshAt = now + 0.75d;
+        }
+
+        private bool ComputeUnsyncedChanges(bool hasEnumChanges)
+        {
+            if (hasEnumChanges)
+            {
+                return true;
+            }
+
+            foreach (var relay in config.relayConfigs)
+            {
+                NormalizeRelayConfig(relay);
+                if (string.IsNullOrEmpty(relay.id) && ((relay.lists?.Count ?? 0) > 0 || (relay.trackedStats?.Count ?? 0) > 0))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

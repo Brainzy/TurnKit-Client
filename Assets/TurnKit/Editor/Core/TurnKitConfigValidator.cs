@@ -96,6 +96,15 @@ namespace TurnKit.Editor
                 return false;
             }
 
+            if (def.valueType == TurnKitConfig.PlayerStoreValueType.NUMBER &&
+                def.numberMin.HasValue &&
+                def.numberMax.HasValue &&
+                def.numberMin.Value > def.numberMax.Value)
+            {
+                error = $"Player store key '{def.storeKey}' has invalid bounds. numberMin cannot be greater than numberMax.";
+                return false;
+            }
+
             return true;
         }
 
@@ -545,6 +554,20 @@ namespace TurnKit.Editor
                 if (!members.Add(memberName))
                 {
                     errors.Add($"Player store member name collision. Multiple keys generate '{memberName}'.");
+                }
+
+                if (def.valueType != TurnKitConfig.PlayerStoreValueType.NUMBER &&
+                    (def.numberMin.HasValue || def.numberMax.HasValue))
+                {
+                    errors.Add($"Player store key '{def.storeKey}' has number bounds but valueType is {def.valueType}. Bounds are only valid for NUMBER.");
+                }
+
+                if (def.valueType == TurnKitConfig.PlayerStoreValueType.NUMBER &&
+                    def.numberMin.HasValue &&
+                    def.numberMax.HasValue &&
+                    def.numberMin.Value > def.numberMax.Value)
+                {
+                    errors.Add($"Player store key '{def.storeKey}' has invalid bounds. numberMin cannot be greater than numberMax.");
                 }
             }
         }

@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using TurnKit.Internal.SimpleJSON;
+using UnityEngine;
 using UnityEngine.Networking;
 
 namespace TurnKit
@@ -52,6 +54,32 @@ namespace TurnKit
         public static PlayerStoreValueBuilder<TValue> Value<TValue>(PlayerStoreToken<TValue> token, TurnKitYourBackendProof proof)
         {
             return new PlayerStoreValueBuilder<TValue>(token, TurnKitClientIdentity.YourBackend(proof));
+        }
+
+        public static PlayerStoreTransactionBuilder Transaction(string transactionId)
+        {
+            var playerId = Relay.CurrentPlayerId;
+            if (string.IsNullOrWhiteSpace(playerId))
+            {
+                throw new InvalidOperationException("PlayerStore.Transaction(transactionId) requires a relay session with CurrentPlayerId. Use an overload with explicit identity.");
+            }
+
+            return new PlayerStoreTransactionBuilder(transactionId, TurnKitClientIdentity.NoAuth(playerId));
+        }
+
+        public static PlayerStoreTransactionBuilder Transaction(string transactionId, string playerId)
+        {
+            return new PlayerStoreTransactionBuilder(transactionId, TurnKitClientIdentity.NoAuth(playerId));
+        }
+
+        public static PlayerStoreTransactionBuilder Transaction(string transactionId, TurnKitPlayerSession session)
+        {
+            return new PlayerStoreTransactionBuilder(transactionId, TurnKitClientIdentity.Authenticated(session));
+        }
+
+        public static PlayerStoreTransactionBuilder Transaction(string transactionId, TurnKitYourBackendProof proof)
+        {
+            return new PlayerStoreTransactionBuilder(transactionId, TurnKitClientIdentity.YourBackend(proof));
         }
     }
 
@@ -208,5 +236,136 @@ namespace TurnKit
                 .Replace("\"", "\\\"");
             return "\"" + escaped + "\"";
         }
+    }
+
+    public sealed class PlayerStoreTransactionBuilder
+    {
+        private static readonly Regex TransactionIdRegex = new("^[a-z0-9._-]{1,64}$", RegexOptions.Compiled);
+        private readonly string _transactionId;
+        private readonly TurnKitClientIdentity _identity;
+
+        internal PlayerStoreTransactionBuilder(string transactionId, TurnKitClientIdentity identity)
+        {
+            _transactionId = transactionId;
+            _identity = identity;
+        }
+
+        public async Task<PlayerStoreTransactionResult> Execute()
+        {
+            ValidateTransactionId(_transactionId);
+
+            var requestBody = JsonUtility.ToJson(new PlayerStoreTransactionRequest
+            {
+                transactionId = _transactionId
+            });
+
+            using var request = TurnKitClientRequest.CreateJson("/v1/client/player-store/tx", "POST", requestBody);
+            await TurnKitClientRequest.PrepareIdentity(request, _identity);
+            await SendTransactionRequest(request);
+
+            var response = JsonUtility.FromJson<PlayerStoreTransactionResponse>(request.downloadHandler.text);
+            if (response == null || string.IsNullOrWhiteSpace(response.transactionId))
+            {
+                throw new Exception("PlayerStore.Transaction response parse failed.");
+            }
+
+            return new PlayerStoreTransactionResult(response.transactionId, response.applied, response.alreadyApplied);
+        }
+
+        private static void ValidateTransactionId(string transactionId)
+        {
+            if (string.IsNullOrWhiteSpace(transactionId) || !TransactionIdRegex.IsMatch(transactionId))
+            {
+                throw new PlayerStoreInvalidTransactionIdException(transactionId);
+            }
+        }
+
+        private static async Task SendTransactionRequest(UnityWebRequest request)
+        {
+            var operation = request.SendWebRequest();
+            while (!operation.isDone)
+            {
+                await Task.Yield();
+            }
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                return;
+            }
+
+            string responseText = request.downloadHandler?.text ?? string.Empty;
+            long status = request.responseCode;
+            if (responseText.Contains("TX_CONDITION_FAILED"))
+            {
+                throw new PlayerStoreTransactionConditionFailedException(responseText);
+            }
+
+            if (responseText.Contains("TX_NOT_ALLOWED"))
+            {
+                throw new PlayerStoreTransactionNotAllowedException(responseText);
+            }
+
+            if (responseText.Contains("INVALID_TRANSACTION_ID"))
+            {
+                throw new PlayerStoreInvalidTransactionIdException(responseText);
+            }
+
+            if (responseText.Contains("TX_MISMATCH"))
+            {
+                throw new PlayerStoreTransactionMismatchException(responseText);
+            }
+
+            throw new Exception($"TurnKit [{status}]: {responseText}");
+        }
+    }
+
+    public readonly struct PlayerStoreTransactionResult
+    {
+        public readonly string TransactionId;
+        public readonly bool Applied;
+        public readonly bool AlreadyApplied;
+
+        public bool Succeeded => Applied || AlreadyApplied;
+
+        public PlayerStoreTransactionResult(string transactionId, bool applied, bool alreadyApplied)
+        {
+            TransactionId = transactionId;
+            Applied = applied;
+            AlreadyApplied = alreadyApplied;
+        }
+    }
+
+    public class PlayerStoreTransactionConditionFailedException : Exception
+    {
+        public PlayerStoreTransactionConditionFailedException(string message) : base(message) { }
+    }
+
+    public class PlayerStoreTransactionNotAllowedException : Exception
+    {
+        public PlayerStoreTransactionNotAllowedException(string message) : base(message) { }
+    }
+
+    public class PlayerStoreInvalidTransactionIdException : Exception
+    {
+        public PlayerStoreInvalidTransactionIdException(string message) : base($"PlayerStore transactionId is invalid. {message}") { }
+    }
+
+    public class PlayerStoreTransactionMismatchException : Exception
+    {
+        public PlayerStoreTransactionMismatchException(string message) : base($"PlayerStore transaction payload mismatch. {message}") { }
+    }
+
+    [Serializable]
+    internal sealed class PlayerStoreTransactionRequest
+    {
+        public string transactionId;
+    }
+
+    [Serializable]
+    internal sealed class PlayerStoreTransactionResponse
+    {
+        public string transactionId;
+        public bool applied;
+        public bool alreadyApplied;
     }
 }
