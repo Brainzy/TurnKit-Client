@@ -30,8 +30,8 @@ namespace TurnKit
             }
 
             using var request = TurnKitClientRequest.CreateJson("/v1/client/auth/email-otp/verify", "POST", JsonUtility.ToJson(new OtpVerifyRequest(email, otp)));
-            var response = await TurnKitClientRequest.SendJson<OtpVerifyResponse>(request);
-            return new TurnKitPlayerSession(response.playerId, response.token, email);
+            var response = await TurnKitClientRequest.SendJson<PlayerAuthResponse>(request);
+            return CreateSession(response, email);
         }
 
         public static Task<TurnKitPlayerSession> ExchangeUgs(string idToken)
@@ -50,19 +50,70 @@ namespace TurnKit
                 "/v1/client/auth/ugs/exchange",
                 "POST",
                 JsonUtility.ToJson(new UgsExchangeRequest(idToken, serverProof)));
-            var response = await TurnKitClientRequest.SendJson<UgsExchangeResponse>(request);
+            var response = await TurnKitClientRequest.SendJson<PlayerAuthResponse>(request);
 
+            return CreateSession(response);
+        }
+
+        public static async Task<TurnKitPlayerSession> ExchangeGooglePlayGames(string serverAuthCode)
+        {
+            if (string.IsNullOrWhiteSpace(serverAuthCode))
+            {
+                throw new ArgumentException("Google Play Games serverAuthCode is required.", nameof(serverAuthCode));
+            }
+
+            using var request = TurnKitClientRequest.CreateJson(
+                "/v1/client/auth/google-play/exchange",
+                "POST",
+                JsonUtility.ToJson(new GooglePlayExchangeRequest(serverAuthCode)));
+            var response = await TurnKitClientRequest.SendJson<PlayerAuthResponse>(request);
+
+            return CreateSession(response);
+        }
+
+        public static async Task<TurnKitPlayerSession> RefreshPlayer(string refreshToken)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                throw new ArgumentException("Refresh token is required.", nameof(refreshToken));
+            }
+
+            using var request = TurnKitClientRequest.CreateJson(
+                "/v1/client/auth/refresh",
+                "POST",
+                JsonUtility.ToJson(new RefreshRequest(refreshToken)));
+            var response = await TurnKitClientRequest.SendJson<PlayerAuthResponse>(request);
+
+            return CreateSession(response);
+        }
+
+        public static async Task Logout(string refreshToken)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                throw new ArgumentException("Refresh token is required.", nameof(refreshToken));
+            }
+
+            using var request = TurnKitClientRequest.CreateJson(
+                "/v1/client/auth/logout",
+                "POST",
+                JsonUtility.ToJson(new RefreshRequest(refreshToken)));
+            await TurnKitClientRequest.Send(request);
+        }
+
+        private static TurnKitPlayerSession CreateSession(PlayerAuthResponse response, string email = null)
+        {
             if (string.IsNullOrWhiteSpace(response.token))
             {
-                throw new Exception("TurnKit UGS exchange did not return a player token.");
+                throw new Exception("TurnKit auth exchange did not return a player token.");
             }
 
             if (string.IsNullOrWhiteSpace(response.playerId))
             {
-                throw new Exception("TurnKit UGS exchange did not return a player id.");
+                throw new Exception("TurnKit auth exchange did not return a player id.");
             }
 
-            return new TurnKitPlayerSession(response.playerId, response.token);
+            return new TurnKitPlayerSession(response.playerId, response.token, response.refreshToken, email);
         }
 
         [Serializable]
@@ -90,10 +141,11 @@ namespace TurnKit
         }
 
         [Serializable]
-        private sealed class OtpVerifyResponse
+        private sealed class PlayerAuthResponse
         {
             public string token;
             public string playerId;
+            public string refreshToken;
         }
 
         [Serializable]
@@ -110,10 +162,25 @@ namespace TurnKit
         }
 
         [Serializable]
-        private sealed class UgsExchangeResponse
+        private sealed class GooglePlayExchangeRequest
         {
-            public string token;
-            public string playerId;
+            public string serverAuthCode;
+
+            public GooglePlayExchangeRequest(string serverAuthCode)
+            {
+                this.serverAuthCode = serverAuthCode;
+            }
+        }
+
+        [Serializable]
+        private sealed class RefreshRequest
+        {
+            public string refreshToken;
+
+            public RefreshRequest(string refreshToken)
+            {
+                this.refreshToken = refreshToken;
+            }
         }
     }
 }

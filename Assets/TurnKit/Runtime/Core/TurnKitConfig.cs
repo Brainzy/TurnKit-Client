@@ -248,7 +248,9 @@ namespace TurnKit
         public enum PlayerAuthMethod
         {
             YOUR_BACKEND,
-            EMAIL_OTP
+            EMAIL_OTP,
+            UGS,
+            GOOGLE_PLAY_GAMES
         }
 
         public enum PlayerStoreValueType
