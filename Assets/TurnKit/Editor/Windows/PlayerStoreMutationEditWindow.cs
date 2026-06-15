@@ -55,16 +55,20 @@ namespace TurnKit.Editor
                 case TurnKitConfig.MutationOperation.ADD:
                 case TurnKitConfig.MutationOperation.SUB:
                     mutation.valueType = TurnKitConfig.PlayerStoreValueType.NUMBER;
+                    mutation.stringValue = string.Empty;
+                    mutation.stringListValue.Clear();
                     mutation.numberValue = EditorGUILayout.DoubleField("Number", mutation.numberValue);
                     break;
                 case TurnKitConfig.MutationOperation.LIST_SET:
                 case TurnKitConfig.MutationOperation.LIST_ADD:
                 case TurnKitConfig.MutationOperation.LIST_REMOVE:
                     mutation.valueType = TurnKitConfig.PlayerStoreValueType.STRING_LIST;
+                    mutation.stringValue = string.Empty;
                     DrawStringListEditor();
                     break;
                 case TurnKitConfig.MutationOperation.LIST_CLEAR:
                     mutation.valueType = TurnKitConfig.PlayerStoreValueType.STRING_LIST;
+                    mutation.stringValue = string.Empty;
                     EditorGUILayout.HelpBox("Value forced to null for LIST_CLEAR.", MessageType.Info);
                     break;
                 case TurnKitConfig.MutationOperation.SET:
@@ -72,12 +76,16 @@ namespace TurnKit.Editor
                     switch (mutation.valueType)
                     {
                         case TurnKitConfig.PlayerStoreValueType.NUMBER:
+                            mutation.stringValue = string.Empty;
+                            mutation.stringListValue.Clear();
                             mutation.numberValue = EditorGUILayout.DoubleField("Number", mutation.numberValue);
                             break;
                         case TurnKitConfig.PlayerStoreValueType.STRING_LIST:
+                            mutation.stringValue = string.Empty;
                             DrawStringListEditor();
                             break;
                         default:
+                            mutation.stringListValue.Clear();
                             mutation.stringValue = EditorGUILayout.TextField("String", mutation.stringValue ?? string.Empty);
                             break;
                     }

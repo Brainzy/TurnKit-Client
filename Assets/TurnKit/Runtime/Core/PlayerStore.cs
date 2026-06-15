@@ -2,6 +2,23 @@ using System;
 
 namespace TurnKit
 {
+    public readonly struct PlayerStoreValueResult<TValue>
+    {
+        public readonly TValue Value;
+        public readonly string UpdatedAtRaw;
+
+        public bool HasUpdatedAt => !string.IsNullOrWhiteSpace(UpdatedAtRaw);
+
+        public DateTimeOffset? UpdatedAt =>
+            DateTimeOffset.TryParse(UpdatedAtRaw, out var parsed) ? parsed : null;
+
+        public PlayerStoreValueResult(TValue value, string updatedAtRaw)
+        {
+            Value = value;
+            UpdatedAtRaw = updatedAtRaw;
+        }
+    }
+
     public readonly struct PlayerStoreToken<TValue>
     {
         internal readonly string StoreKey;
@@ -109,6 +126,11 @@ namespace TurnKit
     public class PlayerStoreTransactionMismatchException : Exception
     {
         public PlayerStoreTransactionMismatchException(string message) : base($"PlayerStore transaction payload mismatch. {message}") { }
+    }
+
+    public class PlayerStoreCooldownActiveException : Exception
+    {
+        public PlayerStoreCooldownActiveException(string message) : base($"PlayerStore cooldown active. {message}") { }
     }
 
     [Serializable]

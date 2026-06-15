@@ -72,6 +72,11 @@ namespace TurnKit
                 throw new PlayerStoreTransactionConditionFailedException(responseText);
             }
 
+            if (responseText.Contains("PLAYER_STORE_COOLDOWN_ACTIVE"))
+            {
+                throw new PlayerStoreCooldownActiveException(responseText);
+            }
+
             if (responseText.Contains("TX_NOT_ALLOWED"))
             {
                 throw new PlayerStoreTransactionNotAllowedException(responseText);
@@ -88,6 +93,31 @@ namespace TurnKit
             }
 
             throw new Exception($"TurnKit [{status}]: {responseText}");
+        }
+    }
+
+    internal static class PlayerStoreRequestExecutor
+    {
+        internal static async Task SendWriteRequest(UnityWebRequest request, string storeKey)
+        {
+            var operation = request.SendWebRequest();
+            while (!operation.isDone)
+            {
+                await Task.Yield();
+            }
+
+            if (request.result == UnityWebRequest.Result.Success)
+            {
+                return;
+            }
+
+            string responseText = request.downloadHandler?.text ?? string.Empty;
+            if (responseText.Contains("PLAYER_STORE_COOLDOWN_ACTIVE"))
+            {
+                throw new PlayerStoreCooldownActiveException($"storeKey={storeKey}. {responseText}");
+            }
+
+            throw new Exception($"TurnKit [{request.responseCode}]: {responseText}");
         }
     }
 }

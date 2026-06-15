@@ -90,6 +90,7 @@ namespace TurnKit.Editor
             EditorGUILayout.EnumPopup("Value Type", def.valueType);
             EditorGUILayout.Toggle("Client Writable", def.clientWritable);
             EditorGUILayout.Toggle("Client Readable", def.clientReadable);
+            EditorGUILayout.TextField("Cooldown Seconds", def.cooldownSeconds > 0 ? def.cooldownSeconds.ToString() : "(none)");
             if (def.valueType == TurnKitConfig.PlayerStoreValueType.NUMBER)
             {
                 EditorGUILayout.TextField("Number Min", def.numberMin.HasValue ? def.numberMin.Value.ToString() : "(none)");

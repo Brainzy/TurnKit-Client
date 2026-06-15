@@ -180,6 +180,7 @@ namespace TurnKit
             public PlayerStoreValueType valueType = PlayerStoreValueType.STRING;
             public bool clientWritable;
             public bool clientReadable;
+            public int cooldownSeconds;
             public double? numberMin;
             public double? numberMax;
         }

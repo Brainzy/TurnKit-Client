@@ -17,6 +17,11 @@ namespace TurnKit
 
         public async Task<TValue> Get()
         {
+            return (await GetResult()).Value;
+        }
+
+        public async Task<PlayerStoreValueResult<TValue>> GetResult()
+        {
             if (!_token.ClientReadable)
             {
                 throw new InvalidOperationException($"PlayerStore key '{_token.StoreKey}' is not client readable.");
@@ -25,10 +30,15 @@ namespace TurnKit
             using var request = TurnKitClientRequest.CreateGet($"/v1/client/player-store/{UnityWebRequest.EscapeURL(_token.StoreKey)}");
             await TurnKitClientRequest.PrepareIdentity(request, _identity);
             await TurnKitClientRequest.Send(request);
-            return PlayerStoreValueCodec.ParseResponseValue<TValue>(request.downloadHandler.text, _token.ValueType, _token.StoreKey);
+            return PlayerStoreValueCodec.ParseResponse<TValue>(request.downloadHandler.text, _token.ValueType, _token.StoreKey);
         }
 
         public async Task Set(TValue value)
+        {
+            await SetResult(value);
+        }
+
+        public async Task<PlayerStoreValueResult<TValue>> SetResult(TValue value)
         {
             if (!_token.ClientWritable)
             {
@@ -38,7 +48,8 @@ namespace TurnKit
             string body = PlayerStoreValueCodec.BuildRequestBody(value, _token.ValueType, _token.StoreKey);
             using var request = TurnKitClientRequest.CreateJson($"/v1/client/player-store/{UnityWebRequest.EscapeURL(_token.StoreKey)}", "PUT", body);
             await TurnKitClientRequest.PrepareIdentity(request, _identity);
-            await TurnKitClientRequest.Send(request);
+            await PlayerStoreRequestExecutor.SendWriteRequest(request, _token.StoreKey);
+            return PlayerStoreValueCodec.ParseResponse<TValue>(request.downloadHandler.text, _token.ValueType, _token.StoreKey);
         }
     }
 }

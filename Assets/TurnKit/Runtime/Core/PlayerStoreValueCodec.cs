@@ -8,7 +8,7 @@ namespace TurnKit
 {
     internal static class PlayerStoreValueCodec
     {
-        internal static T ParseResponseValue<T>(string json, TurnKitConfig.PlayerStoreValueType expectedType, string storeKey)
+        internal static PlayerStoreValueResult<T> ParseResponse<T>(string json, TurnKitConfig.PlayerStoreValueType expectedType, string storeKey)
         {
             var root = JSON.Parse(json).AsObject;
             var valueNode = root?["value"];
@@ -27,10 +27,15 @@ namespace TurnKit
 
             if (parsed is T typed)
             {
-                return typed;
+                return new PlayerStoreValueResult<T>(typed, root["updatedAt"]?.Value);
             }
 
             throw new Exception($"PlayerStore type mismatch for '{storeKey}'. Token expects {typeof(T).Name}, backend type is {expectedType}.");
+        }
+
+        internal static T ParseResponseValue<T>(string json, TurnKitConfig.PlayerStoreValueType expectedType, string storeKey)
+        {
+            return ParseResponse<T>(json, expectedType, storeKey).Value;
         }
 
         internal static string BuildRequestBody<T>(T value, TurnKitConfig.PlayerStoreValueType expectedType, string storeKey)

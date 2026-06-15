@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Xml;
 using TurnKit.Internal.SimpleJSON;
 using UnityEngine;
 
@@ -394,6 +396,7 @@ namespace TurnKit.Editor
                 valueType = ParseEnum(node["valueType"], TurnKitConfig.PlayerStoreValueType.STRING),
                 clientWritable = node["clientWritable"].AsBool,
                 clientReadable = node["clientReadable"].AsBool,
+                cooldownSeconds = ParseDurationSeconds(node["cooldownDuration"]),
                 numberMin = numberMin,
                 numberMax = numberMax
             };
@@ -569,6 +572,11 @@ namespace TurnKit.Editor
 
                             return setArray;
                         default:
+                            if (TryParseInvariantDouble(mutation.stringValue, out var parsedNumber))
+                            {
+                                return new JSONNumber(parsedNumber);
+                            }
+
                             return new JSONString(mutation.stringValue ?? string.Empty);
                     }
             }
@@ -746,6 +754,32 @@ namespace TurnKit.Editor
         private static TEnum ParseNullableEnum<TEnum>(JSONNode node, TEnum fallback) where TEnum : struct
         {
             return node == null || node.IsNull ? fallback : ParseEnum(node.Value, fallback);
+        }
+
+        private static int ParseDurationSeconds(JSONNode node)
+        {
+            if (node == null || node.IsNull || string.IsNullOrWhiteSpace(node.Value))
+            {
+                return 0;
+            }
+
+            try
+            {
+                return Math.Max(0, (int)Math.Round(XmlConvert.ToTimeSpan(node.Value).TotalSeconds));
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static bool TryParseInvariantDouble(string value, out double parsed)
+        {
+            return double.TryParse(
+                value,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out parsed);
         }
     }
 }
