@@ -9,6 +9,7 @@ namespace TurnKit
     internal static class TurnKitClientRequest
     {
         private const int TimeoutSeconds = 10;
+        private const float TimeoutGraceSeconds = 2f;
 
         public static UnityWebRequest CreateJson(string path, string method, string json)
         {
@@ -62,9 +63,16 @@ namespace TurnKit
 
         public static async Task Send(UnityWebRequest request)
         {
+            float startedAt = Time.realtimeSinceStartup;
             var operation = request.SendWebRequest();
             while (!operation.isDone)
             {
+                if (Time.realtimeSinceStartup - startedAt > request.timeout + TimeoutGraceSeconds)
+                {
+                    request.Abort();
+                    throw new TimeoutException($"TurnKit request timed out for {request.method} {request.url}");
+                }
+
                 await Task.Yield();
             }
 

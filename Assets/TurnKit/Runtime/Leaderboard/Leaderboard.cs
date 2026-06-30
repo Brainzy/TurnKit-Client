@@ -35,7 +35,7 @@ namespace TurnKit
     [Serializable]
     public class CombinedScores
     {
-        public TopScores topScores = new();
+        public List<LeaderboardEntry> topScores = new();
         public PlayerScore playerScore = new();
     }
 

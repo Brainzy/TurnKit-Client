@@ -158,22 +158,7 @@ namespace TurnKit
                     continue;
                 }
 
-                int count = Math.Min(reveal.ids?.Length ?? 0, reveal.slugs?.Length ?? 0);
-                bool patched = false;
-                for (int i = 0; i < count; i++)
-                {
-                    var existing = relayList.FindById(reveal.ids[i]);
-                    if (existing == null)
-                    {
-                        continue;
-                    }
-
-                    relayList.RemoveItem(existing);
-                    relayList.AddItem(new RelayItem(existing.Id, reveal.slugs[i], existing.CreatorSlot));
-                    patched = true;
-                }
-
-                if (patched)
+                if (ReplacePrivateListContents(relayList, reveal))
                 {
                     updatedLists.Add(relayList);
                     notifyListChanged?.Invoke(relayList, ListChangeType.ItemsMoved);
@@ -181,6 +166,61 @@ namespace TurnKit
             }
 
             return updatedLists;
+        }
+
+        private static bool ReplacePrivateListContents(RelayList relayList, PrivateListRevealMessage reveal)
+        {
+            int count = Math.Min(reveal.ids?.Length ?? 0, reveal.slugs?.Length ?? 0);
+            if (count <= 0)
+            {
+                if (relayList.Count == 0)
+                {
+                    return false;
+                }
+
+                relayList.ClearItems();
+                return true;
+            }
+
+            var creatorSlotsById = new Dictionary<string, TurnKitConfig.PlayerSlot>(relayList.Count);
+            foreach (var item in relayList.Items)
+            {
+                if (!string.IsNullOrWhiteSpace(item?.Id))
+                {
+                    creatorSlotsById[item.Id] = item.CreatorSlot;
+                }
+            }
+
+            bool changed = relayList.Count != count;
+            if (!changed)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    RelayItem current = relayList[i];
+                    if (current == null ||
+                        current.Id != reveal.ids[i] ||
+                        current.Slug != reveal.slugs[i])
+                    {
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!changed)
+            {
+                return false;
+            }
+
+            relayList.ClearItems();
+            for (int i = 0; i < count; i++)
+            {
+                string itemId = reveal.ids[i];
+                creatorSlotsById.TryGetValue(itemId, out TurnKitConfig.PlayerSlot creatorSlot);
+                relayList.AddItem(new RelayItem(itemId, reveal.slugs[i], creatorSlot));
+            }
+
+            return true;
         }
 
         public void MarkConnected()

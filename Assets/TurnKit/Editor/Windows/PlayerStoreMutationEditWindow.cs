@@ -6,14 +6,16 @@ namespace TurnKit.Editor
 {
     internal sealed class PlayerStoreMutationEditWindow : EditorWindow
     {
+        private TurnKitConfig config;
         private TurnKitConfig.RelayConfig relay;
         private TurnKitConfig.PlayerStoreMutationConfig mutation;
         private Vector2 scrollPosition;
 
-        internal static void ShowWindow(TurnKitConfig.RelayConfig relay, TurnKitConfig.PlayerStoreMutationConfig mutation)
+        internal static void ShowWindow(TurnKitConfig config, TurnKitConfig.RelayConfig relay, TurnKitConfig.PlayerStoreMutationConfig mutation)
         {
             var window = GetWindow<PlayerStoreMutationEditWindow>($"Store Mutation: {mutation?.mutationId ?? "Unnamed"}");
             window.minSize = new Vector2(560, 500);
+            window.config = config;
             window.relay = relay;
             window.mutation = mutation;
             window.Show();
@@ -34,7 +36,7 @@ namespace TurnKit.Editor
             mutation.mutationId = EditorGUILayout.TextField("Mutation Id (optional)", mutation.mutationId ?? string.Empty);
             mutation.phase = (TurnKitConfig.RulePhase)EditorGUILayout.EnumPopup("Phase", mutation.phase);
             mutation.target = (TurnKitConfig.MutationTarget)EditorGUILayout.EnumPopup("Target", mutation.target);
-            mutation.storeKey = EditorGUILayout.TextField("Store Key", mutation.storeKey ?? string.Empty);
+            mutation.storeKey = TurnKitPlayerStoreKeyPopup.Draw("Store Key", mutation.storeKey, config?.playerStoreDefs);
             mutation.operation = (TurnKitConfig.MutationOperation)EditorGUILayout.EnumPopup("Operation", mutation.operation);
             mutation.combinator = (TurnKitConfig.RuleCombinator)EditorGUILayout.EnumPopup("Combinator", mutation.combinator);
 
@@ -149,7 +151,7 @@ namespace TurnKit.Editor
                 }
                 EditorGUILayout.EndHorizontal();
                 condition.source = (TurnKitConfig.ConditionSource)EditorGUILayout.EnumPopup("Source", condition.source);
-                condition.key = EditorGUILayout.TextField("Key", condition.key ?? string.Empty);
+                condition.key = TurnKitPlayerStoreKeyPopup.Draw("Key", condition.key, config?.playerStoreDefs);
                 condition.@operator = (TurnKitConfig.ConditionOperator)EditorGUILayout.EnumPopup("Operator", condition.@operator);
                 condition.value = EditorGUILayout.TextField("Value", condition.value ?? string.Empty);
                 EditorGUILayout.EndVertical();

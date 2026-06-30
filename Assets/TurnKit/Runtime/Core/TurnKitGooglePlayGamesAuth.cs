@@ -67,7 +67,8 @@ namespace TurnKit
         public static void SignOut()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR && TURNKIT_GOOGLE_PLAY_GAMES
-            PlayGamesPlatform.Instance.SignOut();
+            throw new NotSupportedException(
+                "Google Play Games plugin 2.1.0 in this project does not expose a runtime SignOut API.");
 #else
             throw new PlatformNotSupportedException(
                 "Google Play Games sign-out requires Android player build plus the Google Play Games Unity plugin.");

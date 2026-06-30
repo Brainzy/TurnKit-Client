@@ -43,6 +43,7 @@ namespace TurnKit
     internal static class PlayerStoreTransactionExecutor
     {
         private static readonly Regex TransactionIdRegex = new("^[a-z0-9._-]{1,64}$", RegexOptions.Compiled);
+        private const float TimeoutGraceSeconds = 2f;
 
         internal static void ValidateTransactionId(string transactionId)
         {
@@ -54,9 +55,16 @@ namespace TurnKit
 
         internal static async Task SendRequest(UnityWebRequest request)
         {
+            float startedAt = Time.realtimeSinceStartup;
             var operation = request.SendWebRequest();
             while (!operation.isDone)
             {
+                if (Time.realtimeSinceStartup - startedAt > request.timeout + TimeoutGraceSeconds)
+                {
+                    request.Abort();
+                    throw new TimeoutException($"PlayerStore.Transaction timed out for {request.url}");
+                }
+
                 await Task.Yield();
             }
 
@@ -98,11 +106,20 @@ namespace TurnKit
 
     internal static class PlayerStoreRequestExecutor
     {
+        private const float TimeoutGraceSeconds = 2f;
+
         internal static async Task SendWriteRequest(UnityWebRequest request, string storeKey)
         {
+            float startedAt = Time.realtimeSinceStartup;
             var operation = request.SendWebRequest();
             while (!operation.isDone)
             {
+                if (Time.realtimeSinceStartup - startedAt > request.timeout + TimeoutGraceSeconds)
+                {
+                    request.Abort();
+                    throw new TimeoutException($"PlayerStore write timed out for storeKey={storeKey}, url={request.url}");
+                }
+
                 await Task.Yield();
             }
 

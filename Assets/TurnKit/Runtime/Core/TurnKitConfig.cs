@@ -53,6 +53,7 @@ namespace TurnKit
         [Serializable]
         public class LeaderboardConfig
         {
+            public string id;
             public string slug;
             public string displayName;
             public string sortOrder;
@@ -61,6 +62,7 @@ namespace TurnKit
             public double maxScore;
             public string resetFrequency;
             public bool archiveOnReset;
+            public bool clientSubmitEnabled;
             public string nextResetAt;
         }
 
@@ -135,6 +137,14 @@ namespace TurnKit
         public class QueueRequirementConfig
         {
             public string name;
+            public RuleCombinator combinator = RuleCombinator.AND;
+            public List<RelayConditionConfig> conditions = new();
+            public List<QueueRequirementGroupConfig> groups = new();
+        }
+
+        [Serializable]
+        public class QueueRequirementGroupConfig
+        {
             public RuleCombinator combinator = RuleCombinator.AND;
             public List<RelayConditionConfig> conditions = new();
         }

@@ -134,6 +134,19 @@ namespace TurnKit.Editor
 
                 GUILayout.Space(4);
                 EditorGUILayout.LabelField($"Queue Requirements ({relay.queueRequirements.Count})", EditorStyles.boldLabel);
+                if (relay.queueRequirements.Count == 0)
+                {
+                    EditorGUILayout.LabelField("No queue requirements", EditorStyles.miniLabel);
+                }
+                else
+                {
+                    foreach (var requirement in relay.queueRequirements)
+                    {
+                        string requirementName = string.IsNullOrWhiteSpace(requirement?.name) ? "(unnamed)" : requirement.name;
+                        EditorGUILayout.LabelField($"{requirementName}: {BuildQueueRequirementSummary(requirement)}", EditorStyles.wordWrappedMiniLabel);
+                    }
+                }
+
                 EditorGUILayout.LabelField($"Player Store Mutations ({relay.playerStoreMutations.Count})", EditorStyles.boldLabel);
                 GUILayout.Space(4);
                 EditorGUILayout.LabelField($"Tracked Stats ({relay.trackedStats.Count})", EditorStyles.boldLabel);
@@ -161,6 +174,47 @@ namespace TurnKit.Editor
             }
 
             EditorGUILayout.EndVertical();
+        }
+
+        private static string BuildQueueRequirementSummary(TurnKitConfig.QueueRequirementConfig requirement)
+        {
+            if (requirement == null || requirement.groups == null || requirement.groups.Count == 0)
+            {
+                return "No groups";
+            }
+
+            var parts = requirement.groups
+                .Where(group => group != null)
+                .Select(BuildQueueRequirementGroupSummary)
+                .Where(summary => !string.IsNullOrWhiteSpace(summary))
+                .ToList();
+
+            return parts.Count == 0 ? "No groups" : string.Join(" | OR | ", parts);
+        }
+
+        private static string BuildQueueRequirementGroupSummary(TurnKitConfig.QueueRequirementGroupConfig group)
+        {
+            if (group?.conditions == null || group.conditions.Count == 0)
+            {
+                return "Empty group";
+            }
+
+            var parts = group.conditions
+                .Where(condition => condition != null)
+                .Select(condition =>
+                {
+                    string key = string.IsNullOrWhiteSpace(condition.key) ? "?" : condition.key;
+                    string value = string.IsNullOrWhiteSpace(condition.value) ? "?" : condition.value;
+                    return $"{key} {condition.@operator} {value}";
+                })
+                .ToList();
+
+            if (parts.Count == 0)
+            {
+                return "Empty group";
+            }
+
+            return string.Join($" {group.combinator} ", parts);
         }
     }
 }

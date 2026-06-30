@@ -17,6 +17,13 @@ namespace TurnKit.Editor
             {
                 TurnKitEditorWindow.ShowWindow();
             }
+
+            EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(config.clientKey) || string.IsNullOrEmpty(config.gameKeyId));
+            if (GUILayout.Button("Open Leaderboard Manager", GUILayout.Height(28)))
+            {
+                TurnKitEditorWindow.ShowWindow();
+            }
+            EditorGUI.EndDisabledGroup();
             
             EditorGUILayout.Space(10);
             
@@ -68,8 +75,8 @@ namespace TurnKit.Editor
             EditorGUILayout.Space(10);
             
             EditorGUILayout.HelpBox(
-                "To edit relay configurations, sync with server, or manage settings, " +
-                "click 'Open TurnKit Configuration' above or go to Window > TurnKit > Configuration",
+                "To edit leaderboards, relay configurations, sync with server, or manage settings, " +
+                "click the buttons above or go to Tools > TurnKit > Configuration",
                 MessageType.Info
             );
             

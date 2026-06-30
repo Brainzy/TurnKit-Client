@@ -120,6 +120,89 @@ namespace TurnKit.Editor
             }, onError);
         }
 
+        internal static IEnumerator FetchLeaderboards(
+            string gameKeyId,
+            string jwt,
+            Action<List<TurnKitConfig.LeaderboardConfig>> onSuccess,
+            Action<string> onError)
+        {
+            var request = UnityWebRequest.Get($"{BaseUrl}/v1/dev/game-keys/{UnityWebRequest.EscapeURL(gameKeyId)}/leaderboards");
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParseLeaderboardConfigList(responseText));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"FetchLeaderboards Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        internal static IEnumerator CreateLeaderboard(
+            string gameKeyId,
+            TurnKitLeaderboardDraft draft,
+            string jwt,
+            Action<TurnKitConfig.LeaderboardConfig> onSuccess,
+            Action<string> onError)
+        {
+            var request = new UnityWebRequest($"{BaseUrl}/v1/dev/game-keys/{UnityWebRequest.EscapeURL(gameKeyId)}/leaderboards", "POST");
+            request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(BuildLeaderboardCreateJson(draft)));
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParseLeaderboardConfig(JSON.Parse(responseText)));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"CreateLeaderboard Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        internal static IEnumerator UpdateLeaderboardDisplayName(
+            string gameKeyId,
+            string slug,
+            string displayName,
+            string jwt,
+            Action<TurnKitConfig.LeaderboardConfig> onSuccess,
+            Action<string> onError)
+        {
+            string escapedDisplayName = UnityWebRequest.EscapeURL(displayName ?? string.Empty);
+            var request = new UnityWebRequest(
+                $"{BaseUrl}/v1/dev/game-keys/{UnityWebRequest.EscapeURL(gameKeyId)}/leaderboards/{UnityWebRequest.EscapeURL(slug)}?displayName={escapedDisplayName}",
+                "PATCH");
+            request.downloadHandler = new DownloadHandlerBuffer();
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParseLeaderboardConfig(JSON.Parse(responseText)));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"UpdateLeaderboardDisplayName Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        internal static IEnumerator DeleteLeaderboard(
+            string gameKeyId,
+            string slug,
+            string jwt,
+            Action onSuccess,
+            Action<string> onError)
+        {
+            var request = UnityWebRequest.Delete(
+                $"{BaseUrl}/v1/dev/game-keys/{UnityWebRequest.EscapeURL(gameKeyId)}/leaderboards/{UnityWebRequest.EscapeURL(slug)}");
+            return SendRequest(request, jwt, _ => onSuccess?.Invoke(), onError);
+        }
+
         public static IEnumerator PushRelayConfig(
             string gameKeyId,
             TurnKitConfig.RelayConfig relay,
@@ -289,6 +372,193 @@ namespace TurnKit.Editor
         {
             var request = UnityWebRequest.Delete($"{BaseUrl}/v1/dev/player-store-defs/{UnityWebRequest.EscapeURL(storeKey)}?gameKeyId={gameKeyId}");
             return SendRequest(request, jwt, _ => onSuccess?.Invoke(), onError);
+        }
+
+        internal static IEnumerator FetchPlayerStoreTxCatalogEntries(
+            string gameKeyId,
+            string jwt,
+            Action<List<TurnKitPlayerStoreTxCatalogEntry>> onSuccess,
+            Action<string> onError)
+        {
+            var request = UnityWebRequest.Get($"{BaseUrl}/v1/dev/player-store/tx-catalog?gameKeyId={gameKeyId}");
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParsePlayerStoreTxCatalogList(responseText));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"FetchPlayerStoreTxCatalogEntries Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        internal static IEnumerator FetchPlayerStoreTxCatalogEntry(
+            string gameKeyId,
+            string transactionId,
+            string jwt,
+            Action<TurnKitPlayerStoreTxCatalogEntry> onSuccess,
+            Action<string> onError)
+        {
+            var request = UnityWebRequest.Get($"{BaseUrl}/v1/dev/player-store/tx-catalog/{UnityWebRequest.EscapeURL(transactionId)}?gameKeyId={gameKeyId}");
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParsePlayerStoreTxCatalogEntry(JSON.Parse(responseText)));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"FetchPlayerStoreTxCatalogEntry Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        internal static IEnumerator UpsertPlayerStoreTxCatalogEntry(
+            string gameKeyId,
+            TurnKitPlayerStoreTxCatalogEntry entry,
+            string jwt,
+            Action<TurnKitPlayerStoreTxCatalogEntry> onSuccess,
+            Action<string> onError)
+        {
+            string jsonBody = BuildPlayerStoreTxCatalogJson(entry);
+            var request = new UnityWebRequest($"{BaseUrl}/v1/dev/player-store/tx-catalog/{UnityWebRequest.EscapeURL(entry.transactionId)}?gameKeyId={gameKeyId}", "PUT");
+            request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(jsonBody));
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            Debug.Log($"[TurnKit API] UpsertPlayerStoreTxCatalogEntry PUT {request.url}\n{jsonBody}");
+
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParsePlayerStoreTxCatalogEntry(JSON.Parse(responseText)));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"UpsertPlayerStoreTxCatalogEntry Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        internal static IEnumerator DeletePlayerStoreTxCatalogEntry(
+            string gameKeyId,
+            string transactionId,
+            string jwt,
+            Action onSuccess,
+            Action<string> onError)
+        {
+            var request = UnityWebRequest.Delete($"{BaseUrl}/v1/dev/player-store/tx-catalog/{UnityWebRequest.EscapeURL(transactionId)}?gameKeyId={gameKeyId}");
+            return SendRequest(request, jwt, _ => onSuccess?.Invoke(), onError);
+        }
+
+        internal static IEnumerator FetchPlayerStorePurchaseMappings(
+            string gameKeyId,
+            string jwt,
+            Action<List<TurnKitPlayerStorePurchaseMappingEntry>> onSuccess,
+            Action<string> onError)
+        {
+            var request = UnityWebRequest.Get($"{BaseUrl}/v1/dev/player-store/purchase-mappings?gameKeyId={gameKeyId}");
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParsePlayerStorePurchaseMappingList(responseText));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"FetchPlayerStorePurchaseMappings Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        internal static IEnumerator UpsertPlayerStorePurchaseMapping(
+            string gameKeyId,
+            TurnKitPlayerStorePurchaseMappingEntry entry,
+            string jwt,
+            Action<TurnKitPlayerStorePurchaseMappingEntry> onSuccess,
+            Action<string> onError)
+        {
+            string jsonBody = BuildPlayerStorePurchaseMappingJson(entry);
+            var request = new UnityWebRequest($"{BaseUrl}/v1/dev/player-store/purchase-mappings?gameKeyId={gameKeyId}", "POST");
+            request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(jsonBody));
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            Debug.Log($"[TurnKit API] UpsertPlayerStorePurchaseMapping POST {request.url}\n{jsonBody}");
+
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParsePlayerStorePurchaseMappingEntry(JSON.Parse(responseText)));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"UpsertPlayerStorePurchaseMapping Parse Error: {e.Message}");
+                }
+            }, onError);
+        }
+
+        internal static IEnumerator FetchGooglePlayAppConfig(
+            string gameKeyId,
+            string jwt,
+            Action<TurnKitGooglePlayAppConfigDraft> onSuccess,
+            Action<bool> onHandledError,
+            Action<string> onError)
+        {
+            var request = UnityWebRequest.Get($"{BaseUrl}/v1/dev/game-keys/{UnityWebRequest.EscapeURL(gameKeyId)}/player-store/google-play");
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParseGooglePlayAppConfig(responseText));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"FetchGooglePlayAppConfig Parse Error: {e.Message}");
+                }
+            }, error =>
+            {
+                if (error != null && error.Contains("GOOGLE_PLAY_APP_CONFIG_NOT_FOUND"))
+                {
+                    onHandledError?.Invoke(true);
+                    return;
+                }
+
+                onHandledError?.Invoke(false);
+                onError?.Invoke(error);
+            });
+        }
+
+        internal static IEnumerator SaveGooglePlayAppConfig(
+            string gameKeyId,
+            TurnKitGooglePlayAppConfigDraft draft,
+            string jwt,
+            Action<TurnKitGooglePlayAppConfigDraft> onSuccess,
+            Action<string> onError)
+        {
+            string jsonBody = BuildGooglePlayAppConfigJson(draft);
+            var request = new UnityWebRequest($"{BaseUrl}/v1/dev/game-keys/{UnityWebRequest.EscapeURL(gameKeyId)}/player-store/google-play", "PUT");
+            request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(jsonBody));
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            Debug.Log($"[TurnKit API] SaveGooglePlayAppConfig PUT {request.url}\n{jsonBody}");
+
+            return SendRequest(request, jwt, responseText =>
+            {
+                try
+                {
+                    onSuccess?.Invoke(ParseGooglePlayAppConfig(responseText));
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke($"SaveGooglePlayAppConfig Parse Error: {e.Message}");
+                }
+            }, onError);
         }
 
 

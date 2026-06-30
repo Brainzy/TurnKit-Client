@@ -30,6 +30,12 @@ namespace TurnKit.Editor
             GUILayout.Space(10);
             DrawPlayerStoreDefs();
             GUILayout.Space(10);
+            DrawPlayerStoreTxCatalog();
+            GUILayout.Space(10);
+            DrawGooglePlayAppConfig();
+            GUILayout.Space(10);
+            DrawPlayerStorePurchaseMappings();
+            GUILayout.Space(10);
             DrawWebhooks();
             GUILayout.Space(10);
             DrawButtons();
@@ -98,52 +104,16 @@ namespace TurnKit.Editor
 
         private void DrawLeaderboards()
         {
-            config.leaderboards ??= new List<TurnKitConfig.LeaderboardConfig>();
-
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField($"Leaderboards ({config.leaderboards.Count})", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("Synced from bootstrap responses. Manage definitions on the TurnKit backend.", EditorStyles.wordWrappedMiniLabel);
-            GUILayout.Space(5);
-
-            EditorGUI.BeginDisabledGroup(true);
-            EditorGUILayout.TextField("Default Slug", config.defaultLeaderboard ?? string.Empty);
-
-            if (config.leaderboards.Count == 0)
-            {
-                EditorGUILayout.HelpBox("No synced leaderboards yet. Reconnect to TurnKit to refresh bootstrap metadata.", MessageType.Info);
-            }
-            else
-            {
-                foreach (var leaderboard in config.leaderboards)
-                {
-                    DrawLeaderboardSummary(leaderboard);
-                    GUILayout.Space(4);
-                }
-            }
-
-            EditorGUI.EndDisabledGroup();
-            EditorGUILayout.EndVertical();
+            TurnKitLeaderboardSectionRenderer.Draw(
+                config,
+                state,
+                LoadLeaderboards,
+                CreateLeaderboard,
+                EditLeaderboard,
+                SaveLeaderboardDisplayName,
+                DeleteLeaderboard);
         }
 
-        private static void DrawLeaderboardSummary(TurnKitConfig.LeaderboardConfig leaderboard)
-        {
-            if (leaderboard == null)
-            {
-                return;
-            }
-
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            EditorGUILayout.LabelField(string.IsNullOrWhiteSpace(leaderboard.displayName) ? leaderboard.slug : leaderboard.displayName, EditorStyles.boldLabel);
-            EditorGUILayout.LabelField($"Slug: {leaderboard.slug}", EditorStyles.miniLabel);
-            EditorGUILayout.LabelField($"Sort: {leaderboard.sortOrder} | Strategy: {leaderboard.scoreStrategy}", EditorStyles.miniLabel);
-            EditorGUILayout.LabelField($"Range: {leaderboard.minScore} to {leaderboard.maxScore}", EditorStyles.miniLabel);
-            EditorGUILayout.LabelField($"Reset: {leaderboard.resetFrequency} | Archive: {leaderboard.archiveOnReset}", EditorStyles.miniLabel);
-            if (!string.IsNullOrWhiteSpace(leaderboard.nextResetAt))
-            {
-                EditorGUILayout.LabelField($"Next Reset: {leaderboard.nextResetAt}", EditorStyles.miniLabel);
-            }
-            EditorGUILayout.EndVertical();
-        }
         private void DrawRelayConfigs()
         {
             TurnKitRelayConfigSectionRenderer.Draw(config, state, CreateNewRelayConfig, DeleteRelayConfig, NormalizeRelayConfig);
@@ -168,6 +138,40 @@ namespace TurnKit.Editor
         private void DrawPlayerStoreDef(TurnKitConfig.PlayerStoreDefConfig def)
         {
             TurnKitPlayerStoreSectionRenderer.DrawDefCard(def, DeletePlayerStoreDef);
+        }
+
+        private void DrawPlayerStoreTxCatalog()
+        {
+            TurnKitPlayerStoreTxCatalogSectionRenderer.Draw(
+                config,
+                state,
+                LoadPlayerStoreTxCatalogEntries,
+                NewPlayerStoreTxCatalogDraft,
+                EditPlayerStoreTxCatalogEntry,
+                SavePlayerStoreTxCatalogEntry,
+                DeletePlayerStoreTxCatalogEntry,
+                ResolvePlayerStoreDef);
+        }
+
+        private void DrawPlayerStorePurchaseMappings()
+        {
+            TurnKitPlayerStorePurchaseMappingSectionRenderer.Draw(
+                config,
+                state,
+                LoadPlayerStorePurchaseMappings,
+                NewPlayerStorePurchaseMappingDraft,
+                EditPlayerStorePurchaseMapping,
+                SavePlayerStorePurchaseMapping,
+                ResolveTxCatalogEntry);
+        }
+
+        private void DrawGooglePlayAppConfig()
+        {
+            TurnKitGooglePlayAppConfigSectionRenderer.Draw(
+                config,
+                state,
+                LoadGooglePlayAppConfig,
+                SaveGooglePlayAppConfig);
         }
 
         private void DrawWebhookHeaders(TurnKitConfig.WebhookConfig webhook)

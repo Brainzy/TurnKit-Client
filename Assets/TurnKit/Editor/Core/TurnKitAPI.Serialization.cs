@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Xml;
 using TurnKit.Internal.SimpleJSON;
 using UnityEngine;
@@ -37,21 +36,39 @@ namespace TurnKit.Editor
 
             foreach (JSONNode item in array)
             {
-                list.Add(new TurnKitConfig.LeaderboardConfig
-                {
-                    slug = item["slug"],
-                    displayName = item["displayName"],
-                    sortOrder = item["sortOrder"],
-                    scoreStrategy = item["scoreStrategy"],
-                    minScore = item["minScore"].IsNull ? 0d : item["minScore"].AsDouble,
-                    maxScore = item["maxScore"].IsNull ? 0d : item["maxScore"].AsDouble,
-                    resetFrequency = item["resetFrequency"],
-                    archiveOnReset = item["archiveOnReset"].AsBool,
-                    nextResetAt = item["nextResetAt"].IsNull ? null : item["nextResetAt"].Value
-                });
+                list.Add(ParseLeaderboardConfig(item));
             }
 
             return list;
+        }
+
+        private static List<TurnKitConfig.LeaderboardConfig> ParseLeaderboardConfigList(string json)
+        {
+            var array = JSON.Parse(json).AsArray;
+            if (array == null)
+            {
+                return new List<TurnKitConfig.LeaderboardConfig>();
+            }
+
+            return ParseLeaderboardConfigList((JSONNode)array);
+        }
+
+        private static TurnKitConfig.LeaderboardConfig ParseLeaderboardConfig(JSONNode item)
+        {
+            return new TurnKitConfig.LeaderboardConfig
+            {
+                id = item["id"].IsNull ? null : item["id"].Value,
+                slug = item["slug"],
+                displayName = item["displayName"],
+                sortOrder = item["sortOrder"],
+                scoreStrategy = item["scoreStrategy"],
+                minScore = item["minScore"].IsNull ? 0d : item["minScore"].AsDouble,
+                maxScore = item["maxScore"].IsNull ? 0d : item["maxScore"].AsDouble,
+                resetFrequency = item["resetFrequency"],
+                archiveOnReset = item["archiveOnReset"].AsBool,
+                clientSubmitEnabled = item["clientSubmitEnabled"].AsBool,
+                nextResetAt = item["nextResetAt"].IsNull ? null : item["nextResetAt"].Value
+            };
         }
 
         private static TurnKitConfig.RelayConfig ParseRelayConfig(JSONNode node)
@@ -155,15 +172,49 @@ namespace TurnKit.Editor
 
             foreach (JSONNode requirementNode in array)
             {
+                var conditions = ParseRelayConditions(requirementNode["conditions"]);
+                var groups = ParseQueueRequirementGroups(requirementNode["groups"]);
+                if (groups.Count == 0 && conditions.Count > 0)
+                {
+                    groups.Add(new TurnKitConfig.QueueRequirementGroupConfig
+                    {
+                        combinator = ParseEnum(requirementNode["combinator"], TurnKitConfig.RuleCombinator.AND),
+                        conditions = conditions
+                    });
+                    conditions = new List<TurnKitConfig.RelayConditionConfig>();
+                }
+
                 requirements.Add(new TurnKitConfig.QueueRequirementConfig
                 {
                     name = requirementNode["name"].IsNull ? null : requirementNode["name"].Value,
                     combinator = ParseEnum(requirementNode["combinator"], TurnKitConfig.RuleCombinator.AND),
-                    conditions = ParseRelayConditions(requirementNode["conditions"])
+                    conditions = conditions,
+                    groups = groups
                 });
             }
 
             return requirements;
+        }
+
+        private static List<TurnKitConfig.QueueRequirementGroupConfig> ParseQueueRequirementGroups(JSONNode node)
+        {
+            var groups = new List<TurnKitConfig.QueueRequirementGroupConfig>();
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return groups;
+            }
+
+            foreach (JSONNode groupNode in array)
+            {
+                groups.Add(new TurnKitConfig.QueueRequirementGroupConfig
+                {
+                    combinator = ParseEnum(groupNode["combinator"], TurnKitConfig.RuleCombinator.AND),
+                    conditions = ParseRelayConditions(groupNode["conditions"])
+                });
+            }
+
+            return groups;
         }
 
         private static List<TurnKitConfig.PlayerStoreMutationConfig> ParsePlayerStoreMutations(JSONNode node)
@@ -429,6 +480,214 @@ namespace TurnKit.Editor
             return webhook;
         }
 
+        private static List<TurnKitPlayerStoreTxCatalogEntry> ParsePlayerStoreTxCatalogList(string json)
+        {
+            var entries = new List<TurnKitPlayerStoreTxCatalogEntry>();
+            var array = JSON.Parse(json).AsArray;
+            if (array == null)
+            {
+                return entries;
+            }
+
+            foreach (JSONNode item in array)
+            {
+                entries.Add(ParsePlayerStoreTxCatalogEntry(item));
+            }
+
+            return entries;
+        }
+
+        private static List<TurnKitPlayerStorePurchaseMappingEntry> ParsePlayerStorePurchaseMappingList(string json)
+        {
+            var entries = new List<TurnKitPlayerStorePurchaseMappingEntry>();
+            var array = JSON.Parse(json).AsArray;
+            if (array == null)
+            {
+                return entries;
+            }
+
+            foreach (JSONNode item in array)
+            {
+                entries.Add(ParsePlayerStorePurchaseMappingEntry(item));
+            }
+
+            return entries;
+        }
+
+        private static TurnKitPlayerStorePurchaseMappingEntry ParsePlayerStorePurchaseMappingEntry(JSONNode node)
+        {
+            return new TurnKitPlayerStorePurchaseMappingEntry
+            {
+                id = node["id"].IsNull ? null : node["id"].Value,
+                provider = ParseEnum(node["provider"], TurnKitStorePurchaseProvider.GOOGLE_PLAY),
+                purchaseType = ParseEnum(node["purchaseType"], TurnKitStorePurchaseType.PRODUCT),
+                productId = node["productId"].IsNull ? null : node["productId"].Value,
+                grantTransactionId = node["grantTransactionId"].IsNull ? null : node["grantTransactionId"].Value,
+                revokeTransactionId = node["revokeTransactionId"].IsNull ? null : node["revokeTransactionId"].Value,
+                active = node["active"].AsBool
+            };
+        }
+
+        private static TurnKitGooglePlayAppConfigDraft ParseGooglePlayAppConfig(string json)
+        {
+            return ParseGooglePlayAppConfig(JSON.Parse(json));
+        }
+
+        private static TurnKitGooglePlayAppConfigDraft ParseGooglePlayAppConfig(JSONNode node)
+        {
+            var draft = TurnKitGooglePlayAppConfigDrafts.CreateEmpty();
+            if (node == null || node.IsNull)
+            {
+                return draft;
+            }
+
+            draft.id = node["id"].IsNull ? null : node["id"].Value;
+            draft.gameKeyId = node["gameKeyId"].IsNull ? null : node["gameKeyId"].Value;
+            draft.appId = node["appId"].IsNull ? null : node["appId"].Value;
+            draft.androidPackageName = node["androidPackageName"].IsNull ? null : node["androidPackageName"].Value;
+            draft.googleServiceAccountJsonConfigured = node["googleServiceAccountJsonConfigured"].AsBool;
+            draft.createdAt = node["createdAt"].IsNull ? null : node["createdAt"].Value;
+            draft.updatedAt = node["updatedAt"].IsNull ? null : node["updatedAt"].Value;
+
+            return draft;
+        }
+
+        private static TurnKitPlayerStoreTxCatalogEntry ParsePlayerStoreTxCatalogEntry(JSONNode node)
+        {
+            return new TurnKitPlayerStoreTxCatalogEntry
+            {
+                transactionId = node["transactionId"],
+                conditions = ParsePlayerStoreTxCatalogConditions(node["conditions"]),
+                mutations = ParsePlayerStoreTxCatalogMutations(node["mutations"]),
+                mutationCount = node["mutationCount"].IsNull ? 0 : node["mutationCount"].AsInt,
+                catalogVersion = node["catalogVersion"].IsNull ? 1 : Mathf.Max(1, node["catalogVersion"].AsInt),
+                enabled = node["enabled"].AsBool,
+                createdAt = node["createdAt"].IsNull ? null : node["createdAt"].Value,
+                updatedAt = node["updatedAt"].IsNull ? null : node["updatedAt"].Value
+            };
+        }
+
+        private static List<TurnKitPlayerStoreTxCatalogConditionDraft> ParsePlayerStoreTxCatalogConditions(JSONNode node)
+        {
+            var conditions = new List<TurnKitPlayerStoreTxCatalogConditionDraft>();
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return conditions;
+            }
+
+            foreach (JSONNode item in array)
+            {
+                var condition = new TurnKitPlayerStoreTxCatalogConditionDraft
+                {
+                    source = ParseEnum(item["source"], TurnKitConfig.ConditionSource.STORE),
+                    key = item["key"].IsNull ? null : item["key"].Value,
+                    @operator = ParseEnum(item["operator"], TurnKitConfig.ConditionOperator.EQ)
+                };
+                ApplyTypedDraftValue(condition, item["value"]);
+                conditions.Add(condition);
+            }
+
+            return conditions;
+        }
+
+        private static List<TurnKitPlayerStoreTxCatalogMutationDraft> ParsePlayerStoreTxCatalogMutations(JSONNode node)
+        {
+            var mutations = new List<TurnKitPlayerStoreTxCatalogMutationDraft>();
+            var array = node?.AsArray;
+            if (array == null)
+            {
+                return mutations;
+            }
+
+            foreach (JSONNode item in array)
+            {
+                var mutation = new TurnKitPlayerStoreTxCatalogMutationDraft
+                {
+                    storeKey = item["storeKey"].IsNull ? null : item["storeKey"].Value,
+                    operation = ParseEnum(item["operation"], TurnKitConfig.MutationOperation.SET)
+                };
+                ApplyTypedDraftValue(mutation, item["value"]);
+                if (mutation.operation == TurnKitConfig.MutationOperation.LIST_ADD ||
+                    mutation.operation == TurnKitConfig.MutationOperation.LIST_REMOVE)
+                {
+                    mutation.stringValue = item["value"].IsNull ? string.Empty : item["value"].Value;
+                    mutation.valueType = TurnKitConfig.PlayerStoreValueType.STRING_LIST;
+                }
+                if (mutation.operation == TurnKitConfig.MutationOperation.LIST_CLEAR)
+                {
+                    mutation.valueType = TurnKitConfig.PlayerStoreValueType.STRING_LIST;
+                }
+                mutations.Add(mutation);
+            }
+
+            return mutations;
+        }
+
+        private static void ApplyTypedDraftValue(TurnKitPlayerStoreTxCatalogConditionDraft draft, JSONNode node)
+        {
+            draft.valueType = TurnKitConfig.PlayerStoreValueType.STRING;
+            draft.stringValue = string.Empty;
+            draft.numberValue = 0d;
+            draft.stringListValue = new List<string>();
+
+            if (node == null || node.IsNull)
+            {
+                return;
+            }
+
+            if (node.Tag == JSONNodeType.Number)
+            {
+                draft.valueType = TurnKitConfig.PlayerStoreValueType.NUMBER;
+                draft.numberValue = node.AsDouble;
+                return;
+            }
+
+            if (node.Tag == JSONNodeType.Array)
+            {
+                draft.valueType = TurnKitConfig.PlayerStoreValueType.STRING_LIST;
+                foreach (JSONNode item in node.AsArray)
+                {
+                    draft.stringListValue.Add(item.Value);
+                }
+                return;
+            }
+
+            draft.stringValue = node.Value;
+        }
+
+        private static void ApplyTypedDraftValue(TurnKitPlayerStoreTxCatalogMutationDraft draft, JSONNode node)
+        {
+            draft.valueType = TurnKitConfig.PlayerStoreValueType.STRING;
+            draft.stringValue = string.Empty;
+            draft.numberValue = 0d;
+            draft.stringListValue = new List<string>();
+
+            if (node == null || node.IsNull)
+            {
+                return;
+            }
+
+            if (node.Tag == JSONNodeType.Number)
+            {
+                draft.valueType = TurnKitConfig.PlayerStoreValueType.NUMBER;
+                draft.numberValue = node.AsDouble;
+                return;
+            }
+
+            if (node.Tag == JSONNodeType.Array)
+            {
+                draft.valueType = TurnKitConfig.PlayerStoreValueType.STRING_LIST;
+                foreach (JSONNode item in node.AsArray)
+                {
+                    draft.stringListValue.Add(item.Value);
+                }
+                return;
+            }
+
+            draft.stringValue = node.Value;
+        }
+
         private static string BuildRelayConfigJson(TurnKitConfig.RelayConfig relay, bool includeSlug)
         {
             var node = new JSONObject();
@@ -473,8 +732,30 @@ namespace TurnKit.Editor
                 var node = new JSONObject
                 {
                     ["name"] = string.IsNullOrWhiteSpace(requirement.name) ? JSONNull.CreateOrGet() : requirement.name,
-                    ["combinator"] = requirement.combinator.ToString(),
-                    ["conditions"] = BuildRelayConditionsNode(requirement.conditions)
+                    ["combinator"] = TurnKitConfig.RuleCombinator.AND.ToString(),
+                    ["conditions"] = new JSONArray(),
+                    ["groups"] = BuildQueueRequirementGroupsNode(requirement.groups)
+                };
+                array.Add(node);
+            }
+
+            return array;
+        }
+
+        private static JSONNode BuildQueueRequirementGroupsNode(List<TurnKitConfig.QueueRequirementGroupConfig> groups)
+        {
+            var array = new JSONArray();
+            if (groups == null)
+            {
+                return array;
+            }
+
+            foreach (var group in groups)
+            {
+                var node = new JSONObject
+                {
+                    ["combinator"] = group.combinator.ToString(),
+                    ["conditions"] = BuildRelayConditionsNode(group.conditions)
                 };
                 array.Add(node);
             }
@@ -492,6 +773,18 @@ namespace TurnKit.Editor
 
             foreach (var mutation in mutations)
             {
+                JSONNode valueNode = BuildMutationValueNode(mutation);
+                Debug.Log(
+                    $"[TurnKit API] PlayerStoreMutation serialize " +
+                    $"id={mutation.mutationId ?? "(unnamed)"} " +
+                    $"storeKey={mutation.storeKey ?? "(null)"} " +
+                    $"operation={mutation.operation} " +
+                    $"valueType={mutation.valueType} " +
+                    $"stringValue={mutation.stringValue ?? "(null)"} " +
+                    $"numberValue={mutation.numberValue} " +
+                    $"listCount={(mutation.stringListValue == null ? 0 : mutation.stringListValue.Count)} " +
+                    $"json={valueNode}");
+
                 var node = new JSONObject
                 {
                     ["mutationId"] = string.IsNullOrWhiteSpace(mutation.mutationId) ? JSONNull.CreateOrGet() : mutation.mutationId,
@@ -501,7 +794,7 @@ namespace TurnKit.Editor
                     ["operation"] = mutation.operation.ToString(),
                     ["combinator"] = mutation.combinator.ToString(),
                     ["conditions"] = BuildRelayConditionsNode(mutation.conditions),
-                    ["value"] = BuildMutationValueNode(mutation)
+                    ["value"] = valueNode
                 };
                 array.Add(node);
             }
@@ -540,8 +833,6 @@ namespace TurnKit.Editor
                 case TurnKitConfig.MutationOperation.SUB:
                     return new JSONNumber(mutation.numberValue);
                 case TurnKitConfig.MutationOperation.LIST_SET:
-                case TurnKitConfig.MutationOperation.LIST_ADD:
-                case TurnKitConfig.MutationOperation.LIST_REMOVE:
                     var listArray = new JSONArray();
                     if (mutation.stringListValue != null)
                     {
@@ -552,6 +843,9 @@ namespace TurnKit.Editor
                     }
 
                     return listArray;
+                case TurnKitConfig.MutationOperation.LIST_ADD:
+                case TurnKitConfig.MutationOperation.LIST_REMOVE:
+                    return new JSONString(GetSingleListMutationValue(mutation));
                 case TurnKitConfig.MutationOperation.LIST_CLEAR:
                     return JSONNull.CreateOrGet();
                 case TurnKitConfig.MutationOperation.SET:
@@ -572,11 +866,6 @@ namespace TurnKit.Editor
 
                             return setArray;
                         default:
-                            if (TryParseInvariantDouble(mutation.stringValue, out var parsedNumber))
-                            {
-                                return new JSONNumber(parsedNumber);
-                            }
-
                             return new JSONString(mutation.stringValue ?? string.Empty);
                     }
             }
@@ -690,6 +979,16 @@ namespace TurnKit.Editor
             return array;
         }
 
+        private static string GetSingleListMutationValue(TurnKitConfig.PlayerStoreMutationConfig mutation)
+        {
+            if (mutation.stringListValue == null || mutation.stringListValue.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            return mutation.stringListValue[0] ?? string.Empty;
+        }
+
         private static string BuildWebhookCreateJson(TurnKitConfig.WebhookConfig webhook)
         {
             var node = new JSONObject
@@ -741,9 +1040,162 @@ namespace TurnKit.Editor
                 ["clientWritable"] = def.clientWritable,
                 ["clientReadable"] = def.clientReadable
             };
+            if (def.cooldownSeconds > 0)
+            {
+                node["cooldownDuration"] = FormatDuration(def.cooldownSeconds);
+            }
             node["numberMin"] = def.numberMin.HasValue ? new JSONNumber(def.numberMin.Value) : JSONNull.CreateOrGet();
             node["numberMax"] = def.numberMax.HasValue ? new JSONNumber(def.numberMax.Value) : JSONNull.CreateOrGet();
             return node.ToString();
+        }
+
+        private static string BuildLeaderboardCreateJson(TurnKitLeaderboardDraft draft)
+        {
+            var node = new JSONObject
+            {
+                ["slug"] = draft.slug ?? string.Empty,
+                ["displayName"] = draft.displayName ?? string.Empty,
+                ["sortOrder"] = draft.sortOrder.ToString(),
+                ["scoreStrategy"] = draft.scoreStrategy.ToString(),
+                ["minScore"] = CreateNumericJsonNode(draft.minScore, 0d),
+                ["maxScore"] = CreateNumericJsonNode(draft.maxScore, 1000000d),
+                ["resetFrequency"] = draft.resetFrequency.ToString(),
+                ["archiveOnReset"] = draft.archiveOnReset,
+                ["clientSubmitEnabled"] = draft.clientSubmitEnabled
+            };
+            return node.ToString();
+        }
+
+        private static JSONNode CreateNumericJsonNode(string raw, double fallback)
+        {
+            return double.TryParse(raw, out var value) ? new JSONNumber(value) : new JSONNumber(fallback);
+        }
+
+        private static string BuildPlayerStoreTxCatalogJson(TurnKitPlayerStoreTxCatalogEntry entry)
+        {
+            var node = new JSONObject
+            {
+                ["conditions"] = BuildPlayerStoreTxCatalogConditionsNode(entry.conditions),
+                ["mutations"] = BuildPlayerStoreTxCatalogMutationsNode(entry.mutations),
+                ["enabled"] = entry.enabled,
+                ["catalogVersion"] = Mathf.Max(1, entry.catalogVersion)
+            };
+            return node.ToString();
+        }
+
+        private static string BuildPlayerStorePurchaseMappingJson(TurnKitPlayerStorePurchaseMappingEntry entry)
+        {
+            var node = new JSONObject
+            {
+                ["provider"] = entry.provider.ToString(),
+                ["purchaseType"] = entry.purchaseType.ToString(),
+                ["productId"] = entry.productId ?? string.Empty,
+                ["grantTransactionId"] = entry.grantTransactionId ?? string.Empty,
+                ["revokeTransactionId"] = string.IsNullOrWhiteSpace(entry.revokeTransactionId)
+                    ? JSONNull.CreateOrGet()
+                    : new JSONString(entry.revokeTransactionId),
+                ["active"] = entry.active
+            };
+            return node.ToString();
+        }
+
+        private static string BuildGooglePlayAppConfigJson(TurnKitGooglePlayAppConfigDraft draft)
+        {
+            var node = new JSONObject
+            {
+                ["appId"] = draft.appId ?? string.Empty,
+                ["androidPackageName"] = draft.androidPackageName ?? string.Empty,
+                ["googleServiceAccountJson"] = draft.googleServiceAccountJson ?? string.Empty
+            };
+            return node.ToString();
+        }
+
+        private static JSONNode BuildPlayerStoreTxCatalogConditionsNode(List<TurnKitPlayerStoreTxCatalogConditionDraft> conditions)
+        {
+            var array = new JSONArray();
+            if (conditions == null)
+            {
+                return array;
+            }
+
+            foreach (var condition in conditions)
+            {
+                var node = new JSONObject
+                {
+                    ["source"] = TurnKitConfig.ConditionSource.STORE.ToString(),
+                    ["key"] = condition.key ?? string.Empty,
+                    ["operator"] = condition.@operator.ToString(),
+                    ["value"] = BuildTypedDraftValueNode(condition.valueType, condition.stringValue, condition.numberValue, condition.stringListValue, false, condition.stringValue)
+                };
+                array.Add(node);
+            }
+
+            return array;
+        }
+
+        private static JSONNode BuildPlayerStoreTxCatalogMutationsNode(List<TurnKitPlayerStoreTxCatalogMutationDraft> mutations)
+        {
+            var array = new JSONArray();
+            if (mutations == null)
+            {
+                return array;
+            }
+
+            foreach (var mutation in mutations)
+            {
+                var valueNode = mutation.operation switch
+                {
+                    TurnKitConfig.MutationOperation.ADD => new JSONNumber(mutation.numberValue),
+                    TurnKitConfig.MutationOperation.SUB => new JSONNumber(mutation.numberValue),
+                    TurnKitConfig.MutationOperation.LIST_SET => BuildTypedDraftValueNode(TurnKitConfig.PlayerStoreValueType.STRING_LIST, mutation.stringValue, mutation.numberValue, mutation.stringListValue, false, mutation.stringValue),
+                    TurnKitConfig.MutationOperation.LIST_ADD => new JSONString(mutation.stringValue ?? string.Empty),
+                    TurnKitConfig.MutationOperation.LIST_REMOVE => new JSONString(mutation.stringValue ?? string.Empty),
+                    TurnKitConfig.MutationOperation.LIST_CLEAR => JSONNull.CreateOrGet(),
+                    _ => BuildTypedDraftValueNode(mutation.valueType, mutation.stringValue, mutation.numberValue, mutation.stringListValue, false, mutation.stringValue)
+                };
+
+                var node = new JSONObject
+                {
+                    ["storeKey"] = mutation.storeKey ?? string.Empty,
+                    ["operation"] = mutation.operation.ToString(),
+                    ["value"] = valueNode
+                };
+                array.Add(node);
+            }
+
+            return array;
+        }
+
+        private static JSONNode BuildTypedDraftValueNode(
+            TurnKitConfig.PlayerStoreValueType valueType,
+            string stringValue,
+            double numberValue,
+            List<string> stringListValue,
+            bool allowNull,
+            string singleStringValue)
+        {
+            if (allowNull)
+            {
+                return JSONNull.CreateOrGet();
+            }
+
+            switch (valueType)
+            {
+                case TurnKitConfig.PlayerStoreValueType.NUMBER:
+                    return new JSONNumber(numberValue);
+                case TurnKitConfig.PlayerStoreValueType.STRING_LIST:
+                    var array = new JSONArray();
+                    if (stringListValue != null)
+                    {
+                        foreach (var item in stringListValue)
+                        {
+                            array.Add(item ?? string.Empty);
+                        }
+                    }
+                    return array;
+                default:
+                    return new JSONString(singleStringValue ?? stringValue ?? string.Empty);
+            }
         }
 
         private static TEnum ParseEnum<TEnum>(string value, TEnum fallback) where TEnum : struct
@@ -773,13 +1225,37 @@ namespace TurnKit.Editor
             }
         }
 
-        private static bool TryParseInvariantDouble(string value, out double parsed)
+        private static string FormatDuration(int totalSeconds)
         {
-            return double.TryParse(
-                value,
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out parsed);
+            if (totalSeconds <= 0)
+            {
+                return "PT0S";
+            }
+
+            var remainingSeconds = totalSeconds;
+            var hours = remainingSeconds / 3600;
+            remainingSeconds %= 3600;
+            var minutes = remainingSeconds / 60;
+            var seconds = remainingSeconds % 60;
+
+            var parts = new List<string>();
+            if (hours > 0)
+            {
+                parts.Add($"{hours}H");
+            }
+
+            if (minutes > 0)
+            {
+                parts.Add($"{minutes}M");
+            }
+
+            if (seconds > 0 || parts.Count == 0)
+            {
+                parts.Add($"{seconds}S");
+            }
+
+            return $"PT{string.Join(string.Empty, parts)}";
         }
+
     }
 }

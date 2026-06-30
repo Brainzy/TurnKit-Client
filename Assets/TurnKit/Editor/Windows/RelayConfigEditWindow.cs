@@ -536,14 +536,15 @@ namespace TurnKit.Editor
                 {
                     var requirement = relay.queueRequirements[i];
                     string label = string.IsNullOrWhiteSpace(requirement?.name) ? "(unnamed)" : requirement.name;
-                    int conditionCount = requirement?.conditions?.Count ?? 0;
+                    string summary = BuildQueueRequirementSummary(requirement);
+                    string description = $"{label}: {summary}";
 
-                    EditorGUILayout.BeginHorizontal(GUI.skin.box);
-                    EditorGUILayout.LabelField($"{label} | {requirement?.combinator} | conditions: {conditionCount}", EditorStyles.miniLabel);
-                    GUILayout.FlexibleSpace();
+                    EditorGUILayout.BeginVertical(GUI.skin.box);
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField(description, EditorStyles.wordWrappedMiniLabel);
                     if (GUILayout.Button("Edit", GUILayout.Width(50)))
                     {
-                        QueueRequirementEditWindow.ShowWindow(relay, requirement);
+                        QueueRequirementEditWindow.ShowWindow(config, relay, requirement);
                     }
                     if (GUILayout.Button("X", GUILayout.Width(24)))
                     {
@@ -551,6 +552,7 @@ namespace TurnKit.Editor
                         GUIUtility.ExitGUI();
                     }
                     EditorGUILayout.EndHorizontal();
+                    EditorGUILayout.EndVertical();
                 }
             }
 
@@ -560,10 +562,11 @@ namespace TurnKit.Editor
             {
                 var requirement = new TurnKitConfig.QueueRequirementConfig
                 {
-                    conditions = new List<TurnKitConfig.RelayConditionConfig>()
+                    conditions = new List<TurnKitConfig.RelayConditionConfig>(),
+                    groups = new List<TurnKitConfig.QueueRequirementGroupConfig>()
                 };
                 relay.queueRequirements.Add(requirement);
-                QueueRequirementEditWindow.ShowWindow(relay, requirement);
+                QueueRequirementEditWindow.ShowWindow(config, relay, requirement);
             }
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.EndVertical();
@@ -591,7 +594,7 @@ namespace TurnKit.Editor
                     GUILayout.FlexibleSpace();
                     if (GUILayout.Button("Edit", GUILayout.Width(50)))
                     {
-                        PlayerStoreMutationEditWindow.ShowWindow(relay, mutation);
+                        PlayerStoreMutationEditWindow.ShowWindow(config, relay, mutation);
                     }
                     if (GUILayout.Button("X", GUILayout.Width(24)))
                     {
@@ -613,7 +616,7 @@ namespace TurnKit.Editor
                     stringListValue = new List<string>()
                 };
                 relay.playerStoreMutations.Add(mutation);
-                PlayerStoreMutationEditWindow.ShowWindow(relay, mutation);
+                PlayerStoreMutationEditWindow.ShowWindow(config, relay, mutation);
             }
             EditorGUI.EndDisabledGroup();
             EditorGUILayout.EndHorizontal();
@@ -762,6 +765,27 @@ namespace TurnKit.Editor
             {
                 relay.queueRequirements = new List<TurnKitConfig.QueueRequirementConfig>();
             }
+            else
+            {
+                foreach (var requirement in relay.queueRequirements)
+                {
+                    if (requirement == null)
+                    {
+                        continue;
+                    }
+
+                    requirement.groups ??= new List<TurnKitConfig.QueueRequirementGroupConfig>();
+                    if (requirement.groups.Count == 0 && requirement.conditions != null && requirement.conditions.Count > 0)
+                    {
+                        requirement.groups.Add(new TurnKitConfig.QueueRequirementGroupConfig
+                        {
+                            combinator = requirement.combinator,
+                            conditions = new List<TurnKitConfig.RelayConditionConfig>(requirement.conditions)
+                        });
+                    }
+                    requirement.conditions = new List<TurnKitConfig.RelayConditionConfig>();
+                }
+            }
 
             if (relay.playerStoreMutations == null)
             {
@@ -770,6 +794,62 @@ namespace TurnKit.Editor
 
             relay.afkTurnTimerSeconds = Mathf.Max(0, relay.afkTurnTimerSeconds);
             relay.disconnectedTurnTimerSeconds = Mathf.Max(0, relay.disconnectedTurnTimerSeconds);
+        }
+
+        private static string BuildQueueRequirementSummary(TurnKitConfig.QueueRequirementConfig requirement)
+        {
+            if (requirement == null || requirement.groups == null || requirement.groups.Count == 0)
+            {
+                return "No groups";
+            }
+
+            var parts = new List<string>();
+            for (int i = 0; i < requirement.groups.Count; i++)
+            {
+                var group = requirement.groups[i];
+                if (group == null)
+                {
+                    continue;
+                }
+
+                string groupSummary = BuildQueueRequirementGroupSummary(group, i + 1);
+                if (!string.IsNullOrWhiteSpace(groupSummary))
+                {
+                    parts.Add(groupSummary);
+                }
+            }
+
+            return parts.Count == 0 ? "No groups" : string.Join(" | OR | ", parts);
+        }
+
+        private static string BuildQueueRequirementGroupSummary(TurnKitConfig.QueueRequirementGroupConfig group, int groupIndex)
+        {
+            if (group.conditions == null || group.conditions.Count == 0)
+            {
+                return $"Group {groupIndex}";
+            }
+
+            var parts = new List<string>();
+            for (int i = 0; i < group.conditions.Count; i++)
+            {
+                var condition = group.conditions[i];
+                if (condition == null)
+                {
+                    continue;
+                }
+
+                string key = string.IsNullOrWhiteSpace(condition.key) ? "?" : condition.key;
+                string value = string.IsNullOrWhiteSpace(condition.value) ? "?" : condition.value;
+                parts.Add($"{key} {condition.@operator} {value}");
+            }
+
+            if (parts.Count == 0)
+            {
+                return $"Group {groupIndex}";
+            }
+
+            string separator = $" {group.combinator} ";
+            return string.Join(separator, parts);
         }
     }
 }

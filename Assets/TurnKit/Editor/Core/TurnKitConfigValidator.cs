@@ -108,6 +108,295 @@ namespace TurnKit.Editor
             return true;
         }
 
+        public static bool TryValidateLeaderboardCreateDraft(
+            TurnKitConfig config,
+            TurnKitLeaderboardDraft draft,
+            out string error)
+        {
+            error = null;
+            if (draft == null)
+            {
+                error = "Leaderboard draft is missing.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(draft.slug))
+            {
+                error = "Leaderboard slug is required.";
+                return false;
+            }
+
+            if (!Regex.IsMatch(draft.slug, "^[a-z0-9-]{1,64}$"))
+            {
+                error = "Leaderboard slug must match ^[a-z0-9-]{1,64}$.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(draft.displayName))
+            {
+                error = "Leaderboard display name is required.";
+                return false;
+            }
+
+            if (draft.displayName.Length > 50)
+            {
+                error = "Leaderboard display name must be 50 characters or less.";
+                return false;
+            }
+
+            if (!double.TryParse(draft.minScore, out var minScore))
+            {
+                error = $"Invalid min score '{draft.minScore}'.";
+                return false;
+            }
+
+            if (!double.TryParse(draft.maxScore, out var maxScore))
+            {
+                error = $"Invalid max score '{draft.maxScore}'.";
+                return false;
+            }
+
+            if (minScore > maxScore)
+            {
+                error = "Leaderboard min score cannot be greater than max score.";
+                return false;
+            }
+
+            if (config?.leaderboards != null &&
+                config.leaderboards.Any(existing => existing != null &&
+                    string.Equals(existing.slug, draft.slug, System.StringComparison.Ordinal)))
+            {
+                error = $"Duplicate leaderboard slug '{draft.slug}'.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryValidateLeaderboardDisplayName(string displayName, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(displayName))
+            {
+                error = "Leaderboard display name is required.";
+                return false;
+            }
+
+            if (displayName.Length > 50)
+            {
+                error = "Leaderboard display name must be 50 characters or less.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryValidatePlayerStoreTxCatalogEntry(TurnKitConfig config, TurnKitPlayerStoreTxCatalogEntry entry, out string error)
+        {
+            error = null;
+            if (entry == null)
+            {
+                error = "Tx catalog entry is missing.";
+                return false;
+            }
+
+            if (!TryGetTransactionIdError(entry.transactionId, out error))
+            {
+                return false;
+            }
+
+            entry.conditions ??= new List<TurnKitPlayerStoreTxCatalogConditionDraft>();
+            entry.mutations ??= new List<TurnKitPlayerStoreTxCatalogMutationDraft>();
+
+            if (entry.conditions.Count > 20)
+            {
+                error = "Tx catalog entry exceeds max 20 conditions.";
+                return false;
+            }
+
+            if (entry.mutations.Count == 0 || entry.mutations.Count > 20)
+            {
+                error = "Tx catalog entry must contain 1-20 mutations.";
+                return false;
+            }
+
+            if (entry.catalogVersion < 1)
+            {
+                error = "Catalog version must be at least 1.";
+                return false;
+            }
+
+            foreach (var condition in entry.conditions)
+            {
+                if (condition == null)
+                {
+                    error = "Tx catalog entry contains a null condition.";
+                    return false;
+                }
+
+                if (!TryGetPlayerStoreKeyError(condition.key, out error))
+                {
+                    error = $"Condition store key is invalid. {error}";
+                    return false;
+                }
+
+                var def = config?.playerStoreDefs?.FirstOrDefault(item => item != null && string.Equals(item.storeKey, condition.key));
+                if (def == null)
+                {
+                    error = $"Condition store key '{condition.key}' is not defined in Player Store Defs.";
+                    return false;
+                }
+
+                if (def != null)
+                {
+                    if ((condition.@operator == TurnKitConfig.ConditionOperator.GT ||
+                         condition.@operator == TurnKitConfig.ConditionOperator.GTE ||
+                         condition.@operator == TurnKitConfig.ConditionOperator.LT ||
+                         condition.@operator == TurnKitConfig.ConditionOperator.LTE) &&
+                        def.valueType != TurnKitConfig.PlayerStoreValueType.NUMBER)
+                    {
+                        error = $"Condition '{condition.key}' uses {condition.@operator} but the player-store key is not NUMBER.";
+                        return false;
+                    }
+
+                    if ((condition.@operator == TurnKitConfig.ConditionOperator.CONTAINS ||
+                         condition.@operator == TurnKitConfig.ConditionOperator.NOT_CONTAINS) &&
+                        def.valueType != TurnKitConfig.PlayerStoreValueType.STRING_LIST)
+                    {
+                        error = $"Condition '{condition.key}' uses {condition.@operator} but the player-store key is not STRING_LIST.";
+                        return false;
+                    }
+                }
+            }
+
+            foreach (var mutation in entry.mutations)
+            {
+                if (mutation == null)
+                {
+                    error = "Tx catalog entry contains a null mutation.";
+                    return false;
+                }
+
+                if (!TryGetPlayerStoreKeyError(mutation.storeKey, out error))
+                {
+                    error = $"Mutation store key is invalid. {error}";
+                    return false;
+                }
+
+                var def = config?.playerStoreDefs?.FirstOrDefault(item => item != null && string.Equals(item.storeKey, mutation.storeKey));
+                if (def == null)
+                {
+                    error = $"Mutation store key '{mutation.storeKey}' is not defined in Player Store Defs.";
+                    return false;
+                }
+
+                if ((mutation.operation == TurnKitConfig.MutationOperation.ADD || mutation.operation == TurnKitConfig.MutationOperation.SUB) &&
+                    def.valueType != TurnKitConfig.PlayerStoreValueType.NUMBER)
+                {
+                    error = $"Mutation '{mutation.storeKey}' uses {mutation.operation} but the player-store key is not NUMBER.";
+                    return false;
+                }
+
+                if ((mutation.operation == TurnKitConfig.MutationOperation.LIST_SET ||
+                     mutation.operation == TurnKitConfig.MutationOperation.LIST_ADD ||
+                     mutation.operation == TurnKitConfig.MutationOperation.LIST_REMOVE ||
+                     mutation.operation == TurnKitConfig.MutationOperation.LIST_CLEAR) &&
+                    def.valueType != TurnKitConfig.PlayerStoreValueType.STRING_LIST)
+                {
+                    error = $"Mutation '{mutation.storeKey}' uses {mutation.operation} but the player-store key is not STRING_LIST.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public static bool TryValidatePlayerStorePurchaseMappingEntry(
+            TurnKitConfig config,
+            TurnKitPlayerStorePurchaseMappingEntry entry,
+            List<TurnKitPlayerStoreTxCatalogEntry> txCatalogEntries,
+            out string error)
+        {
+            error = null;
+            if (entry == null)
+            {
+                error = "Purchase mapping entry is missing.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.productId))
+            {
+                error = "Product id is required.";
+                return false;
+            }
+
+            if (!TryGetTransactionIdError(entry.grantTransactionId, out error))
+            {
+                error = $"Grant transaction id is invalid. {error}";
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.revokeTransactionId) &&
+                !TryGetTransactionIdError(entry.revokeTransactionId, out error))
+            {
+                error = $"Revoke transaction id is invalid. {error}";
+                return false;
+            }
+
+            txCatalogEntries ??= new List<TurnKitPlayerStoreTxCatalogEntry>();
+            bool HasTx(string transactionId) =>
+                txCatalogEntries.Any(item => item != null && string.Equals(item.transactionId, transactionId));
+
+            if (!HasTx(entry.grantTransactionId))
+            {
+                error = $"Grant transaction id '{entry.grantTransactionId}' is not defined in loaded tx-catalog entries.";
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.revokeTransactionId) && !HasTx(entry.revokeTransactionId))
+            {
+                error = $"Revoke transaction id '{entry.revokeTransactionId}' is not defined in loaded tx-catalog entries.";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryValidateGooglePlayAppConfig(
+            TurnKitGooglePlayAppConfigDraft draft,
+            out string error)
+        {
+            error = null;
+            if (draft == null)
+            {
+                error = "Google Play app config is missing.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(draft.appId))
+            {
+                error = "App id is required.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(draft.androidPackageName))
+            {
+                error = "Android package name is required.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(draft.googleServiceAccountJson))
+            {
+                if (!draft.googleServiceAccountJsonConfigured)
+                {
+                    error = "Google service account JSON is required on first save.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         public static bool TryValidateRelay(TurnKitConfig config, TurnKitConfig.RelayConfig relay, out List<string> errors)
         {
             errors = new List<string>();
@@ -236,6 +525,24 @@ namespace TurnKit.Editor
             if (!Regex.IsMatch(value, "^[a-z0-9._-]{1,64}$"))
             {
                 error = "Store key must match ^[a-z0-9._-]{1,64}$ (lowercase only).";
+                return false;
+            }
+
+            return true;
+        }
+
+        public static bool TryGetTransactionIdError(string value, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                error = "Transaction id cannot be empty.";
+                return false;
+            }
+
+            if (!Regex.IsMatch(value, "^[a-zA-Z0-9._-]{1,100}$"))
+            {
+                error = "Transaction id must match ^[a-zA-Z0-9._-]{1,100}$.";
                 return false;
             }
 
@@ -409,16 +716,39 @@ namespace TurnKit.Editor
                 }
 
                 requirement.conditions ??= new List<TurnKitConfig.RelayConditionConfig>();
-                if (requirement.conditions.Count == 0)
+                requirement.groups ??= new List<TurnKitConfig.QueueRequirementGroupConfig>();
+                if (requirement.groups.Count == 0)
                 {
-                    errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' must contain at least one condition.");
-                }
-                if (requirement.conditions.Count > 20)
-                {
-                    errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' exceeds max 20 conditions.");
+                    errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' must contain at least one group.");
                 }
 
-                ValidateConditions(relay, $"Queue requirement '{requirement.name ?? "(unnamed)"}'", requirement.conditions, errors);
+                if (requirement.groups.Count > 20)
+                {
+                    errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' exceeds max 20 groups.");
+                }
+
+                for (int i = 0; i < requirement.groups.Count; i++)
+                {
+                    var group = requirement.groups[i];
+                    if (group == null)
+                    {
+                        errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' contains a null group.");
+                        continue;
+                    }
+
+                    group.conditions ??= new List<TurnKitConfig.RelayConditionConfig>();
+                    if (group.conditions.Count == 0)
+                    {
+                        errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' group {i + 1} must contain at least one condition.");
+                    }
+
+                    if (group.conditions.Count > 20)
+                    {
+                        errors.Add($"{relay.slug}: Queue requirement '{requirement.name ?? "(unnamed)"}' group {i + 1} exceeds max 20 conditions.");
+                    }
+
+                    ValidateConditions(relay, $"Queue requirement '{requirement.name ?? "(unnamed)"}' group {i + 1}", group.conditions, errors);
+                }
             }
         }
 
