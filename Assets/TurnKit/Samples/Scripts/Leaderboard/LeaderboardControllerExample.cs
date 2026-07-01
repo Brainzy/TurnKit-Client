@@ -39,7 +39,7 @@ namespace TurnKit.Example
         public async void OnGetTopScoresAndPlayerRankButton()
         {
             CombinedScores result = await Leaderboard.GetCombined(playerIdText.text); // Can add more params like Leaderboard.GetCombined(playerNameInput.text, 10, 3, true, "new-admin-added-leaderboard");
-            PopulateList(result.topScores.scores);
+            PopulateList(result.topScores);
             PopulateList(result.playerScore.scores, result.playerScore.startRank, true);
         }
 
